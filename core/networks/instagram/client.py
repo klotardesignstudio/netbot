@@ -7,6 +7,9 @@ Uses a real browser for all Instagram operations:
 - Comment posting
 - Profile/hashtag browsing for discovery
 """
+from core.interfaces import SocialNetworkClient
+from core.models import SocialPost, SocialAuthor, SocialPlatform, SocialComment
+from typing import Union
 import os
 import json
 import logging
@@ -23,7 +26,7 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
-class PlaywrightInstagramClient:
+class InstagramClient(SocialNetworkClient):
     """
     Instagram client using Playwright for browser automation.
     """
@@ -35,6 +38,10 @@ class PlaywrightInstagramClient:
         self.page: Optional[Page] = None
         self.session_path = Path("browser_state")
         self._is_logged_in = False
+    
+    @property
+    def platform(self) -> SocialPlatform:
+        return SocialPlatform.INSTAGRAM
     
     def _random_delay(self, min_sec: float = 1.0, max_sec: float = 3.0):
         """Human-like random delay."""
@@ -428,8 +435,71 @@ class PlaywrightInstagramClient:
         
         return comments
     
+    def get_post_details(self, post_id: str) -> Optional[SocialPost]:
+        """Fetches full details of a specific post."""
+        data = self._get_post_data(post_id)
+        if not data:
+            return None
+            
+        # Convert to SocialPost
+        return SocialPost(
+            id=data['code'],
+            platform=self.platform,
+            author=SocialAuthor(
+                username=data['username'],
+                platform=self.platform
+            ),
+            content=data['caption'],
+            url=f"https://www.instagram.com/p/{data['code']}/",
+            media_urls=[data['image_url']] if data.get('image_url') else [],
+            media_type="image",
+            comments=[
+                SocialComment(
+                    id=f"temp_id_{i}",
+                    author=SocialAuthor(username=c['username'], platform=self.platform),
+                    text=c['text']
+                ) for i, c in enumerate(data.get('comments', []))
+            ],
+            raw_data=data
+        )
+
+    def get_user_latest_posts(self, username: str, limit: int = 5) -> List[SocialPost]:
+        """Fetches latest posts from a user's profile."""
+        raw_posts = self.get_user_latest_medias(username, amount=limit)
+        return [self._map_to_social_post(p) for p in raw_posts if p]
+
+    def search_posts(self, query: str, limit: int = 10) -> List[SocialPost]:
+        """Searches for posts (hashtags)."""
+        # Remove # if present
+        tag = query.replace("#", "")
+        raw_posts = self.get_hashtag_top_medias(tag, amount=limit)
+        return [self._map_to_social_post(p) for p in raw_posts if p]
+
+    def _map_to_social_post(self, data: Dict[str, Any]) -> SocialPost:
+        """Helper to convert raw dict to SocialPost."""
+        return SocialPost(
+            id=data['code'],
+            platform=self.platform,
+            author=SocialAuthor(
+                username=data['username'],
+                platform=self.platform
+            ),
+            content=data['caption'],
+            url=f"https://www.instagram.com/p/{data['code']}/",
+            media_urls=[data['image_url']] if data.get('image_url') else [],
+            media_type="image",
+            comments=[
+                SocialComment(
+                    id=f"temp_id_{i}",
+                    author=SocialAuthor(username=c['username'], platform=self.platform),
+                    text=c['text']
+                ) for i, c in enumerate(data.get('comments', []))
+            ],
+            raw_data=data
+        )
+
     def get_media_info(self, media_id: str) -> Optional[Dict[str, Any]]:
-        """Gets full details of a media by its code."""
+        """Deprecated: Use get_post_details instead."""
         return self._get_post_data(media_id)
     
     def get_media_comments(self, media_id: str, amount: int = 5) -> List[Dict[str, str]]:
@@ -439,8 +509,10 @@ class PlaywrightInstagramClient:
         self._random_delay(1, 2)
         return self._get_post_comments(amount)
     
-    def like_post(self, media_id: str) -> bool:
+    def like_post(self, post: Union[SocialPost, str]) -> bool:
         """Likes a post."""
+        media_id = post.id if isinstance(post, SocialPost) else post
+        
         if settings.dry_run:
             logger.info(f"[DRY RUN] Would like post {media_id}")
             return True
@@ -490,8 +562,10 @@ class PlaywrightInstagramClient:
             logger.error(f"Error liking post {media_id}: {e}")
             return False
     
-    def post_comment(self, media_id: str, text: str) -> bool:
+    def post_comment(self, post: Union[SocialPost, str], text: str) -> bool:
         """Posts a comment on a media."""
+        media_id = post.id if isinstance(post, SocialPost) else post
+        
         if settings.dry_run:
             logger.info(f"[DRY RUN] Would comment on {media_id}: {text}")
             return True
@@ -588,4 +662,4 @@ class PlaywrightInstagramClient:
 
 
 # Singleton instance
-client = PlaywrightInstagramClient()
+client = InstagramClient()

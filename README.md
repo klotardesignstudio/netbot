@@ -24,13 +24,15 @@
 
 ## 🏗️ Project Architecture
 
-The project is modular and separated into clear responsibilities:
+The project follows a **modular event-driven architecture**, designed to support multiple social platforms with a shared AI brain.
 
-- **`core/agent.py` (The Brain):** Where the AI magic happens. Defines the bot's "Persona" and uses OpenAI to decide *if* it should comment and *what* to comment.
-- **`core/instagram_client.py` (The Body):** Controls the browser via Playwright. Handles CSS selectors, login, data extraction, and action execution (Like/Comment).
-- **`core/discovery.py` (The Explorer):** Defines the post search strategy (VIPs vs Hashtags) and filters invalid candidates.
-- **`core/database.py` (The Memory):** Manages data persistence in Supabase.
-- **`main.py` (The Conductor):** Main loop that orchestrates interaction cycles and manages rest times.
+- **`core/agent.py` (The Brain):** Platform-agnostic AI agent. Uses OpenAI/Agno to analyze content and decide on actions, regardless of the source network.
+- **`core/interfaces.py` (The Contracts):** Defines abstract base classes (`SocialNetworkClient`, `DiscoveryStrategy`) that all network modules must implement.
+- **`core/networks/` (The Limbs):** Contains platform-specific implementations.
+  - **`instagram/client.py`:** Controls the browser via Playwright for Instagram.
+  - **`instagram/discovery.py`:** Finds candidates on Instagram (VIPs vs Hashtags).
+- **`core/database.py` (The Memory):** Manages data persistence in Supabase, tracking interactions across all platforms.
+- **`main.py` (The Conductor):** Main loop that orchestrates interaction cycles for all enabled networks.
 
 ---
 

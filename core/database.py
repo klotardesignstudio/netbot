@@ -17,30 +17,32 @@ class Database:
         
         self.client: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
-    def log_interaction(self, post_id: str, username: str, comment_text: str, metadata: dict = None):
+    def log_interaction(self, post_id: str, username: str, comment_text: str, platform: str, metadata: dict = None):
         """Records a successful interaction."""
         data = {
             "post_id": post_id,
             "username": username,
             "comment_text": comment_text,
+            "platform": platform,
             "metadata": metadata or {},
             "created_at": datetime.now().isoformat()
         }
         try:
             self.client.table("interactions").insert(data).execute()
-            self.increment_daily_count()
+            self.increment_daily_count(platform)
         except Exception as e:
             logger.error(f"Error logging interaction: {e}")
             self.log_app_event("ERROR", "database", f"Failed to log interaction: {e}")
 
-    def increment_daily_count(self):
-        """Updates the daily_stats table."""
+    def increment_daily_count(self, platform: str):
+        """Updates the daily_stats table for the specific platform."""
         today = datetime.today().date().isoformat()
         try:
-            res = self.client.table("daily_stats").select("*").eq("date", today).execute()
+            res = self.client.table("daily_stats").select("*").eq("date", today).eq("platform", platform).execute()
             if not res.data:
                 self.client.table("daily_stats").insert({
                     "date": today,
+                    "platform": platform,
                     "interaction_count": 1
                 }).execute()
             else:
@@ -48,15 +50,15 @@ class Database:
                 self.client.table("daily_stats").update({
                     "interaction_count": current_count + 1,
                     "last_updated": datetime.now().isoformat()
-                }).eq("date", today).execute()
+                }).eq("date", today).eq("platform", platform).execute()
         except Exception as e:
             logger.error(f"Error updating daily stats: {e}")
 
-    def get_daily_count(self) -> int:
-        """Returns the number of interactions made today."""
+    def get_daily_count(self, platform: str) -> int:
+        """Returns the number of interactions made today for the specific platform."""
         today = datetime.today().date().isoformat()
         try:
-            res = self.client.table("daily_stats").select("interaction_count").eq("date", today).execute()
+            res = self.client.table("daily_stats").select("interaction_count").eq("date", today).eq("platform", platform).execute()
             if res.data:
                 return res.data[0]["interaction_count"]
             return 0
@@ -64,10 +66,10 @@ class Database:
             logger.error(f"Error fetching daily count: {e}")
             return 0
 
-    def check_if_interacted(self, post_id: str) -> bool:
+    def check_if_interacted(self, post_id: str, platform: str) -> bool:
         """Checks if we already interacted with this specific post (deduplication)."""
         try:
-            res = self.client.table("interactions").select("id").eq("post_id", post_id).execute()
+            res = self.client.table("interactions").select("id").eq("post_id", post_id).eq("platform", platform).execute()
             return len(res.data) > 0
         except Exception as e:
             logger.error(f"Error checking interaction: {e}")

@@ -5,14 +5,18 @@ from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from config.settings import settings
 from core.logger import logger
+from core.models import SocialPost, ActionDecision, SocialPlatform
 
 # --- Structured Output Schema ---
-class PostAction(BaseModel):
-    should_comment: bool = Field(..., description="Set to True if we should comment, False to skip (sensitive content/boring/irrelevant).")
+# We reuse ActionDecision from models, but Agno might need a Pydantic model for output parsing
+# So we keep a specific output model and map it later, or use valid Pydantic models directly.
+
+class AgentOutput(BaseModel):
+    should_comment: bool = Field(..., description="Set to True if we should comment, False to skip.")
     comment_text: str = Field(..., description="The comment text. MUST be in English. No hashtags. Max 1 emoji. Avoid generic phrases.")
     reasoning: str = Field(..., description="Brief reason for the decision and the chosen comment.")
 
-class InstagramAgent:
+class SocialAgent:
     def __init__(self):
         self.prompts = settings.load_prompts()
         self.agent = self._create_agent()
@@ -25,7 +29,7 @@ class InstagramAgent:
         constraints = self.prompts.get("constraints", {})
         
         system_prompt = f"""
-        You are an Instagram User interacting with posts.
+        You are a Social Media User interacting with posts.
         Role: {persona.get('role', 'User')}
         Tone: {persona.get('tone', 'Casual')}
         Language: {persona.get('language', 'en-US')}
@@ -36,59 +40,65 @@ class InstagramAgent:
         Constraints:
         {json.dumps(constraints, indent=2)}
         
-        Your Goal: Read the caption, comments (context), and analyze the image to generate a contextual, authentic engagement.
+        Your Goal: Read the content, comments (context), and analyze media to generate a contextual, authentic engagement.
         """
         
         return Agent(
             model=OpenAIChat(id="gpt-4o-mini"),
-            description="Instagram Engagement Agent",
+            description="Social Engagement Agent",
             instructions=system_prompt,
-            output_schema=PostAction,
+            output_schema=AgentOutput,
             markdown=True
         )
 
-    def decide_and_comment(self, candidate: dict) -> Optional[PostAction]:
+    def decide_and_comment(self, post: SocialPost) -> ActionDecision:
         """
-        Analyzes a candidate post and returns a PostAction.
+        Analyzes a candidate post and returns an ActionDecision.
         """
         try:
             # Prepare Input
             comments_context = ""
-            if candidate.get('comments'):
-                formatted_comments = "\n".join([f"- @{c['username']}: {c['text']}" for c in candidate['comments']])
+            if post.comments:
+                formatted_comments = "\n".join([f"- @{c.author.username}: {c.text}" for c in post.comments])
                 comments_context = f"\nRecent Comments (for context):\n{formatted_comments}"
 
             user_input = f"""
-            Analyze this Instagram Post:
-            - Author: @{candidate['username']}
-            - Caption: "{candidate['caption']}"
-            - Media Type: {candidate.get('media_type')}
+            Analyze this {post.platform.value} Post:
+            - Author: @{post.author.username}
+            - Content: "{post.content}"
+            - Media Type: {post.media_type}
             {comments_context}
             
             Determine if I should comment. If yes, write the comment.
             """
             
-            logger.info(f"Agent analyzing post {candidate['media_id']} by {candidate['username']}...")
-            logger.info(f"📝 Caption: {candidate.get('caption', 'EMPTY')[:200]}...")
-            logger.info(f"🖼️  Image URL: {candidate.get('image_url', 'NONE')}")
+            logger.info(f"Agent analyzing post {post.id} by {post.author.username} on {post.platform.value}...")
             
             # Try to pass image URL directly in the prompt if available
-            if candidate.get('image_url'):
-                user_input += f"\n\nImage URL (for context): {candidate['image_url']}"
+            if post.media_urls:
+                # Assuming simple support for the first image for now
+                user_input += f"\n\nImage URL (for context): {post.media_urls[0]}"
             
-            # Run agent without images parameter (it was causing issues)
+            # Run agent
             response_obj = self.agent.run(user_input)
-            response: PostAction = response_obj.content
+            response: AgentOutput = response_obj.content
             
             # Log Token Usage if available
             if hasattr(response_obj, 'metrics') and response_obj.metrics:
                 logger.info(f"💰 Token Usage: {response_obj.metrics}")
             
             logger.info(f"Agent Decision: Comment={response.should_comment} | Reasoning: {response.reasoning}")
-            return response
+            
+            return ActionDecision(
+                should_act=response.should_comment,
+                content=response.comment_text,
+                reasoning=response.reasoning,
+                action_type="comment",
+                platform=post.platform
+            )
 
         except Exception as e:
             logger.error(f"Agent Malfunction: {e}")
-            return None
+            return ActionDecision(should_act=False, reasoning=f"Error: {e}")
 
-agent = InstagramAgent()
+agent = SocialAgent()
