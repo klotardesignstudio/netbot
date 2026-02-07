@@ -2,84 +2,84 @@
 
 > **Automated Engagement Agent powered by GPT-4o Vision & Agno Framework.**
 
-**NetBot** é um agente autônomo inteligente projetado para interagir no Instagram simulando comportamento humano. Diferente de bots tradicionais que usam APIs privadas (arriscado) ou comentários genéricos, o NetBot "olha" para o post, entende o contexto (legenda + imagem) e gera comentários relevantes e autênticos.
+**NetBot** is an intelligent autonomous agent designed to interact on Instagram by simulating human behavior. Unlike traditional bots that use private APIs (risky) or generic comments, NetBot "looks" at the post, understands the context (caption + image), and generates relevant and authentic comments.
 
-## ✨ Funcionalidades Principais
+## ✨ Key Features
 
-- **🧠 Inteligência Multimodal (Vision + Text):** Usa `GPT-4o` (via framework **Agno**) para analisar a imagem e a legenda do post antes de interagir.
-- **🕵️ Navegação Human-Like (Playwright):**
-  - Usa um **navegador real** (Chromium) para navegar no Instagram.
-  - Clica, digita e faz scroll como um humano.
-  - Mantém **cookies de sessão** para evitar logins constantes e suspeitas.
-- **🎯 Discovery Híbrido Inteligente:**
-  - **70% VIP List:** Foca em perfis de alta relevância definidos por você.
-  - **30% Hashtags:** Explora novos conteúdos em nichos específicos.
-- **🛡️ Segurança & Anti-Ban:**
-  - **Limites Diários:** Controlados via banco de dados para não exceder taxas seguras.
-  - **Jitter (Intervalos Aleatórios):** Pausas variáveis entre ações (ex: 10-50 min) para parecer natural.
-  - **Verificação de Duplicidade:** Nunca interage no mesmo post duas vezes.
-- **☁️ Supabase Integration:** Armazena logs de interação, estatísticas diárias e erros na nuvem.
-
----
-
-## 🏗️ Arquitetura do Projeto
-
-O projeto é modular e separado em responsabilidades claras:
-
-- **`core/agent.py` (O Cérebro):** Onde a mágica da IA acontece. Define a "Persona" do bot e usa a OpenAI para decidir *se* deve comentar e *o que* comentar.
-- **`core/instagram_client.py` (O Corpo):** Controla o navegador via Playwright. Lida com seletores CSS, login, extração de dados da página e execução de ações (Like/Comment).
-- **`core/discovery.py` (O Explorador):** Define a estratégia de busca de posts (VIPs vs Hashtags) e filtra candidatos inválidos.
-- **`core/database.py` (A Memória):** Gerencia a persistência de dados no Supabase.
-- **`main.py` (O Maestro):** Loop principal que orquestra os ciclos de interação e gerencia o tempo de repouso.
+- **🧠 Multimodal Intelligence (Vision + Text):** Uses `GPT-4o` (via **Agno** framework) to analyze the post's image and caption before interacting.
+- **🕵️ Human-Like Navigation (Playwright):**
+  - Uses a **real browser** (Chromium) to navigate Instagram.
+  - Clicks, types, and scrolls like a human.
+  - Maintains **session cookies** to avoid constant logins and suspicion.
+- **🎯 Intelligent Hybrid Discovery:**
+  - **70% VIP List:** Focuses on high-relevance profiles defined by you.
+  - **30% Hashtags:** Explores new content in specific niches.
+- **🛡️ Safety & Anti-Ban:**
+  - **Daily Limits:** Controlled via database to not exceed safe rates.
+  - **Jitter (Random Intervals):** Variable pauses between actions (e.g., 10-50 min) to appear natural.
+  - **Duplication Check:** Never interacts with the same post twice.
+- **☁️ Supabase Integration:** Stores interaction logs, daily statistics, and errors in the cloud.
 
 ---
 
-## 🛠️ Tecnologias
+## 🏗️ Project Architecture
+
+The project is modular and separated into clear responsibilities:
+
+- **`core/agent.py` (The Brain):** Where the AI magic happens. Defines the bot's "Persona" and uses OpenAI to decide *if* it should comment and *what* to comment.
+- **`core/instagram_client.py` (The Body):** Controls the browser via Playwright. Handles CSS selectors, login, data extraction, and action execution (Like/Comment).
+- **`core/discovery.py` (The Explorer):** Defines the post search strategy (VIPs vs Hashtags) and filters invalid candidates.
+- **`core/database.py` (The Memory):** Manages data persistence in Supabase.
+- **`main.py` (The Conductor):** Main loop that orchestrates interaction cycles and manages rest times.
+
+---
+
+## 🛠️ Technologies
 
 - **Python 3.10+**
-- **[Agno Framework](https://github.com/agno-agi/agno):** Orquestração de Agentes AI.
-- **[Playwright](https://playwright.dev/):** Automação de navegador moderna e resiliente.
+- **[Agno Framework](https://github.com/agno-agi/agno):** AI Agent Orchestration.
+- **[Playwright](https://playwright.dev/):** Modern and resilient browser automation.
 - **[Supabase](https://supabase.com/):** Database (PostgreSQL) as a Service.
-- **OpenAI GPT-4o-mini:** Modelo de linguagem e visão.
+- **OpenAI GPT-4o-mini:** Language and vision model.
 
 ---
 
-## 🚀 Instalação e Uso
+## 🚀 Installation and Usage
 
-### 1. Pré-requisitos
+### 1. Prerequisites
 - Python 3.10+
-- Conta no OpenAI (API Key)
-- Projeto no Supabase (URL e Key)
+- OpenAI Account (API Key)
+- Supabase Project (URL and Key)
 
-### 2. Configuração
-1. Clone o repositório.
-2. Instale as dependências:
+### 2. Setup
+1. Clone the repository.
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    playwright install chromium
    ```
-3. Configure o `.env` (use `.env.example` como base):
+3. Configure `.env` (use `.env.example` as a base):
    ```bash
    OPENAI_API_KEY=sk-...
    SUPABASE_URL=https://...
    SUPABASE_KEY=ey...
-   IG_USERNAME=seu_usuario
-   IG_PASSWORD=sua_senha
+   IG_USERNAME=your_username
+   IG_PASSWORD=your_password
    ```
 
-### 3. Personalização
-- **VIPs:** As listas de perfis VIP e Hashtags ficam em `config/`.
-- **Persona:** Edite os prompts em `config/prompts.yaml` (se existir) ou diretamente no `core/agent.py` para mudar a personalidade do bot.
+### 3. Customization
+- **VIPs:** VIP profile lists and Hashtags are in `config/`.
+- **Persona:** Edit prompts in `config/prompts.yaml` (if exists) or directly in `core/agent.py` to change the bot's personality.
 
-### 4. Executando
+### 4. Running
 ```bash
 python main.py
 ```
 
-> **Nota:** Por padrão, o bot pode iniciar em modo `DRY_RUN` (apenas simulação, sem comentar de verdade). Verifique o `config/settings.py` para ajustar.
+> **Note:** By default, the bot may start in `DRY_RUN` mode (simulation only, no real comments). Check `config/settings.py` to adjust.
 
 ---
 
 ## ⚠️ Disclaimer
 
-Este projeto é **educacional**. O uso de automação em redes sociais (bots) viola os Termos de Serviço do Instagram e pode levar ao bloqueio da sua conta. **Use por sua conta e risco.**
+This project is for **educational purposes**. Using automation on social networks (bots) violates Instagram's Terms of Service and may lead to your account being blocked. **Use at your own risk.**

@@ -58,7 +58,7 @@ class PlaywrightInstagramClient:
                     storage_state=str(self.session_path / "state.json"),
                     viewport={'width': 1280, 'height': 800},
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    locale='pt-BR',
+                    locale='en-US',
                     timezone_id='America/Sao_Paulo'
                 )
             else:
@@ -66,7 +66,7 @@ class PlaywrightInstagramClient:
                 self.context = self.browser.new_context(
                     viewport={'width': 1280, 'height': 800},
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    locale='pt-BR',
+                    locale='en-US',
                     timezone_id='America/Sao_Paulo'
                 )
             
@@ -94,7 +94,7 @@ class PlaywrightInstagramClient:
             # Check if we're logged in by looking for the home/profile elements
             try:
                 self.page.wait_for_selector(
-                    'svg[aria-label="Home"], svg[aria-label="Página inicial"], a[href="/direct/inbox/"]',
+                    'svg[aria-label="Home"], a[href="/direct/inbox/"]',
                     timeout=5000
                 )
                 logger.info("Already logged in!")
@@ -127,7 +127,7 @@ class PlaywrightInstagramClient:
             self.context = self.browser.new_context(
                 viewport={'width': 1280, 'height': 800},
                 user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                locale='pt-BR',
+                locale='en-US',
                 timezone_id='America/Sao_Paulo'
             )
             
@@ -138,7 +138,7 @@ class PlaywrightInstagramClient:
             
             # Wait for successful login (up to 5 minutes)
             self.page.wait_for_selector(
-                'svg[aria-label="Home"], svg[aria-label="Página inicial"], a[href="/direct/inbox/"]',
+                'svg[aria-label="Home"], a[href="/direct/inbox/"]',
                 timeout=300000
             )
             
@@ -455,15 +455,12 @@ class PlaywrightInstagramClient:
             # Liked state usually has a specific color (red) or aria-label change
             like_button_selectors = [
                 'svg[aria-label="Like"]', 
-                'svg[aria-label="Curtir"]',
-                'svg[aria-label="Gefällt mir"]',
-                # Unliked state usually has these labels. Liked has "Unlike" / "Descurtir"
+                # Unliked state usually has these labels. Liked has "Unlike"
             ]
             
             # If we find an "Unlike" or "Descurtir" button, it's already liked
             already_liked_selectors = [
-                'svg[aria-label="Unlike"]',
-                'svg[aria-label="Descurtir"]'
+                'svg[aria-label="Unlike"]'
             ]
             
             for selector in already_liked_selectors:
@@ -508,7 +505,7 @@ class PlaywrightInstagramClient:
             # 1. First, try to click the comment icon to activate/focus the area
             # This is improved to handle both English and Portuguese
             try:
-                comment_icon_selector = 'svg[aria-label="Comment"], svg[aria-label="Comentar"], svg[aria-label="Responder"], span[class*="_aamx"]'
+                comment_icon_selector = 'svg[aria-label="Comment"], span[class*="_aamx"]'
                 self.page.wait_for_selector(comment_icon_selector, timeout=5000)
                 comment_icons = self.page.query_selector_all(comment_icon_selector)
                 
@@ -521,7 +518,7 @@ class PlaywrightInstagramClient:
 
             # 2. Now look for the textarea
             # It might have been dynamically inserted or focused
-            textarea_selector = 'textarea[aria-label*="omment"], textarea[aria-label*="comentário"], textarea[placeholder*="omment"], textarea[placeholder*="comentário"], form textarea'
+            textarea_selector = 'textarea[aria-label*="omment"], textarea[placeholder*="omment"], form textarea'
             
             try:
                 self.page.wait_for_selector(textarea_selector, timeout=5000, state='visible')
@@ -559,9 +556,7 @@ class PlaywrightInstagramClient:
             # Try finding the specific 'Post' button first
             post_button_selectors = [
                 'div[role="button"]:has-text("Post")',
-                'div[role="button"]:has-text("Publicar")', 
                 'button:has-text("Post")',
-                'button:has-text("Publicar")',
                 'form button[type="submit"]',
                 'div[class*="x1i10hfl"]:has-text("Post")' # Generic class sometimes used
             ]

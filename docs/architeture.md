@@ -1,154 +1,154 @@
 # 🤖 Instagram AI Persona (MVP)
 
-**Versão:** 1.0 (Alpha - Testnet)  
-**Role:** Automação de Engajamento Humano  
+**Version:** 1.0 (Alpha - Testnet)  
+**Role:** Human Engagement Automation  
 **Stack:** Python, Playwright, Agno (Phidata), OpenAI GPT-4o-mini, Supabase.
 
-## 1. Visão Geral do Produto
+## 1. Product Overview
 
-O **Instagram AI Persona** é um agente autônomo projetado para interagir (comentar) em posts de terceiros, simulando o comportamento, tom de voz e visão de um usuário humano específico.
+**Instagram AI Persona** is an autonomous agent designed to interact (comment) on third-party posts, simulating the behavior, tone of voice, and vision of a specific human user.
 
-Diferente de bots tradicionais que comentam baseados apenas em hashtags ("Nice pic!"), este sistema utiliza **IA Multimodal (Visão + Texto)** para "enxergar" a foto e ler a legenda, gerando comentários contextuais impossíveis de distinguir de um humano.
+Unlike traditional bots that comment based solely on hashtags ("Nice pic!"), this system uses **Multimodal AI (Vision + Text)** to "see" the photo and read the caption, generating contextual comments indistinguishable from a human.
 
-### 🎯 Objetivos (KPIs)
-*   **Meta Diária:** 10 interações de alta qualidade (Segunda a Sexta).
-*   **Qualidade:** 0% de comentários genéricos (spam).
-*   **Segurança:** Manter a conta segura operando dentro dos limites da API não-oficial.
+### 🎯 Objectives (KPIs)
+*   **Daily Goal:** 10 high-quality interactions (Monday to Friday).
+*   **Quality:** 0% generic comments (spam).
+*   **Safety:** Keep the account safe by operating within the limits of the unofficial API.
 
-## 2. Arquitetura do Sistema
+## 2. System Architecture
 
-O fluxo de dados segue uma pipeline linear com persistência de estado.
+The data flow follows a linear pipeline with state persistence.
 
 ```mermaid
 graph TD
-    A -->|Gatilho| B[1. Discovery]
-    B -->|Post Candidato| C[2. Preparation]
-    C -->|Contexto Completo| D[3. Brain (Agno Agent)]
+    A -->|Trigger| B[1. Discovery]
+    B -->|Candidate Post| C[2. Preparation]
+    C -->|Full Context| D[3. Brain (Agno Agent)]
     D -->|Structured Output| E[4. Execution (Playwright)]
-    E -->|Sucesso| F[5. Persistência (Supabase)]
+    E -->|Success| F[5. Persistence (Supabase)]
 ```
 
-## 3. Detalhamento das Etapas (Pipeline)
+## 3. Step Details (Pipeline)
 
-### 🕵️ Etapa 1: Discovery (Descoberta & Roteamento)
-**Objetivo:** Selecionar onde interagir, balanceando manutenção de networking e descoberta de novos perfis.
+### 🕵️ Step 1: Discovery (Discovery & Routing)
+**Objective:** Select where to interact, balancing networking maintenance and discovering new profiles.
 
-*   **Lógica de Roteamento (70/30):**
-    *   **70% (VIPs):** Lista fixa de ~100 perfis (amigos, influencers, leads).
-    *   **30% (Discovery):** Lista de Hashtags de nicho (ex: `#pythondev`, `#indiehacker`).
-*   **Filtros de Qualidade:**
-    *   Ignorar posts com > 3 dias (evita parecer stalker).
-    *   Ignorar perfis privados.
-    *   Ignorar posts já interagidos (Check no SQLite).
-    *   **Nas Hashtags:** Selecionar apenas "Top Posts" (evita spam da aba "Recentes").
+*   **Routing Logic (70/30):**
+    *   **70% (VIPs):** Fixed list of ~100 profiles (friends, influencers, leads).
+    *   **30% (Discovery):** List of niche Hashtags (e.g., `#pythondev`, `#indiehacker`).
+*   **Quality Filters:**
+    *   Ignore posts > 3 days old (avoids looking like a stalker).
+    *   Ignore private profiles.
+    *   Ignore posts already interacted with (Check in SQLite).
+    *   **In Hashtags:** Select only "Top Posts" (avoids spam from the "Recent" tab).
 
-### 👁️ Etapa 2: Preparation (Preparação de Contexto)
-**Objetivo:** Agrupar as informações necessárias para o Agente.
+### 👁️ Step 2: Preparation (Context Preparation)
+**Objective:** Gather necessary information for the Agent.
 
-*   **Entrada:** Objeto `Media` (Unified Format).
-*   **Contexto Visual:**
-    *   Identificar URL da imagem/capa (O Agno baixa/processa automaticamente).
-*   **Contexto Social:**
-    *   Baixar os últimos 5-10 comentários para análise de sentimento.
-*   **Contexto Textual:**
-    *   Legenda limpa (Sanitizada).
+*   **Input:** `Media` Object (Unified Format).
+*   **Visual Context:**
+    *   Identify image/cover URL (Agno downloads/processes automatically).
+*   **Social Context:**
+    *   Download the last 5-10 comments for sentiment analysis.
+*   **Textual Context:**
+    *   Clean caption (Sanitized).
 
-### 🧠 Etapa 3: The Brain (Núcleo de IA - Agno Agent)
-**Objetivo:** Gerar o comentário usando um Agente Autônomo (Agno Framework). O Agente recebe a imagem e a legenda, processa com GPT-4o e retorna uma saída estruturada.
+### 🧠 Step 3: The Brain (AI Core - Agno Agent)
+**Objective:** Generate the comment using an Autonomous Agent (Agno Framework). The Agent receives the image and caption, processes it with GPT-4o, and returns a structured output.
 
-*   **Agente (Agno/Phidata):**
-    *   Substitui chamadas manuais da OpenAI por um Agente estruturado.
-    *   **Modelo:** `gpt-4o-mini` (Vision/Omni).
-*   **Persona & Instruções:**
-    *   Mantém o tom: Casual, Brasileiro, Breve.
-    *   **Configuração Centralizada:** Todos os prompts (System Message, regras) ficam em `config/prompts.yaml` para fácil ajuste sem mexer no código.
-    *   Instruções injetadas no System Prompt do Agente.
+*   **Agent (Agno/Phidata):**
+    *   Replaces manual OpenAI calls with a structured Agent.
+    *   **Model:** `gpt-4o-mini` (Vision/Omni).
+*   **Persona & Instructions:**
+    *   Maintains tone: Casual, Brazilian Portuguese (or adapted), Brief.
+    *   **Centralized Configuration:** All prompts (System Message, rules) are in `config/prompts.yaml` for easy adjustment without touching code.
+    *   Instructions injected into the Agent's System Prompt.
 *   **Structured Output (Pydantic):**
-    *   O Agente não retorna texto solto. Ele retorna um objeto JSON estrito:
+    *   The Agent does not return loose text. It returns a strict JSON object:
     ```python
     class PostAction(BaseModel):
-        should_comment: bool = Field(..., description="Se deve comentar ou ignorar (SKIP)")
-        comment_text: str = Field(..., description="O texto do comentário (sem hashtags)")
-        reasoning: str = Field(..., description="Breve motivo da decisão")
+        should_comment: bool = Field(..., description="Whether to comment or ignore (SKIP)")
+        comment_text: str = Field(..., description="The comment text (no hashtags)")
+        reasoning: str = Field(..., description="Brief reason for the decision")
     ```
-*   **Regras Anti-Bloqueio (Hard Constraints):**
-    *   Proibido usar hashtags na resposta.
-    *   Proibido pedir para seguir (CTA).
-    *   Máximo de 1 emoji.
-    *   Comentar sobre elementos visuais da foto (prova de humanidade).
-*   **Validação de Segurança:**
-    *   Se o Agente detectar conteúdo sensível (Luto, Tragédia, Política Extrema), `should_comment` será `False`.
+*   **Anti-Blocking Rules (Hard Constraints):**
+    *   Forbidden to use hashtags in the response.
+    *   Forbidden to ask for follows (CTA).
+    *   Maximum of 1 emoji.
+    *   Comment on visual elements of the photo (proof of humanity).
+*   **Safety Validation:**
+    *   If the Agent detects sensitive content (Grief, Tragedy, Extreme Politics), `should_comment` will be `False`.
 
-### 🤖 Etapa 4: Execution (Playwright)
-**Objetivo:** Efetuar a ação na plataforma usando um navegador real.
+### 🤖 Step 4: Execution (Playwright)
+**Objective:** Perform the action on the platform using a real browser.
 
-*   **Tecnologia:** `Playwright` (Chromium em modo Headless ou Headed).
-*   **Gestão de Sessão (Crítico):**
-    *   Login realizado apenas uma vez.
-    *   Sessão salva em `session.json`.
-    *   Execuções subsequentes reutilizam os cookies/tokens para evitar "Suspicious Login".
-*   **Humanização (Jitter):**
-    *   **Random Sleep:** Pausa aleatória (5s a 15s) entre "ler" o post e "comentar".
-    *   **Simulação de digitação:** (backend delay).
+*   **Technology:** `Playwright` (Chromium in Headless or Headed mode).
+*   **Session Management (Critical):**
+    *   Login performed only once.
+    *   Session saved in `session.json`.
+    *   Subsequent executions reuse cookies/tokens to avoid "Suspicious Login".
+*   **Humanization (Jitter):**
+    *   **Random Sleep:** Random pause (5s to 15s) between "reading" the post and "commenting".
+    *   **Typing simulation:** (backend delay).
 
-### 💾 Etapa 5: Persistência (Memória)
-**Objetivo:** Evitar duplicidade e controlar limites.
+### 💾 Step 5: Persistence (Memory)
+**Objective:** Avoid duplication and control limits.
 
-*   **Banco de Dados:** Supabase.
+*   **Database:** Supabase.
 *   **Schema:**
-    *   `interaction_log`: Registra `post_id`, `username`, `comment_text`, `timestamp`.
-    *   `daily_counter`: Controla se já atingiu as 10 interações do dia.
+    *   `interaction_log`: Records `post_id`, `username`, `comment_text`, `timestamp`.
+    *   `daily_counter`: Controls if the 10 daily interactions limit has been reached.
 
-### 📜 Etapa 6: Logging & Monitoring
-**Objetivo:** Rastreabilidade total das ações do robô.
+### 📜 Step 6: Logging & Monitoring
+**Objective:** Total traceability of robot actions.
 
-*   **Console (Stdout):** Logs detalhados (INFO/DEBUG) para acompanhar em tempo real o que o robô está pensando/fazendo. Ex: `[INFO] Analisando Post 123...`, `[DEBUG] SkipReason: Conteúdo sensível`.
-*   **Arquivo (.log):** Salva os mesmos logs do console em arquivo `app.log` para debug posterior.
-*   **Banco de Dados:** Supabase (PostgreSQL). Apenas ações de SUCESSO e estatísticas diárias.
+*   **Console (Stdout):** Detailed logs (INFO/DEBUG) to track what the robot is thinking/doing in real-time. E.g., `[INFO] Analyzing Post 123...`, `[DEBUG] SkipReason: Sensitive content`.
+*   **File (.log):** Saves the same console logs to `app.log` file for later debugging.
+*   **Database:** Supabase (PostgreSQL). Only SUCCESS actions and daily statistics.
 
-## 4. Estrutura de Pastas (Sugestão)
+## 4. Folder Structure (Suggestion)
 
 ```plaintext
 /instagram-ai-persona
 │
 ├── /config
-│   ├── vip_list.json       # Lista de usuários alvo
-│   ├── hashtags.json       # Lista de tags alvo
-│   └── prompts.yaml        # [NEW] Central de Prompts (Persona & Regras)
+│   ├── vip_list.json       # Target user list
+│   ├── hashtags.json       # Target tag list
+│   └── prompts.yaml        # [NEW] Prompts Center (Persona & Rules)
 │
 ├── /core
-│   ├── discovery.py        # Lógica de seleção de posts
-│   ├── brain.py            # Integração OpenAI (GPT-4o)
-│   ├── instagram_client.py # Client do Playwright (Navegação/Ações)
-│   ├── database.py         # Conexão SQLite
-│   └── logger.py           # [NEW] Configuração de Logs (Console + Arquivo)
+│   ├── discovery.py        # Post selection logic
+│   ├── brain.py            # OpenAI Integration (GPT-4o)
+│   ├── instagram_client.py # Playwright Client (Navigation/Actions)
+│   ├── database.py         # SQLite Connection
+│   └── logger.py           # [NEW] Log Configuration (Console + File)
 │
-├── main.py                 # Arquivo principal (Orquestrador)
-├── requirements.txt        # Dependências (playwright, openai, etc)
-├── .env                    # Chaves de API (OpenAI, User/Pass)
-└── README.md               # Este arquivo
+├── main.py                 # Main file (Orchestrator)
+├── requirements.txt        # Dependencies (playwright, openai, etc)
+├── .env                    # API Keys (OpenAI, User/Pass)
+└── README.md               # This file
 ```
 
-## 5. Requisitos de Instalação
+## 5. Installation Requirements
 
-### Dependências Python
+### Python Dependencies
 ```bash
 pip install playwright openai pillow schedule python-dotenv
 playwright install chromium
 ```
 
-### Variáveis de Ambiente (.env)
+### Environment Variables (.env)
 ```ini
 OPENAI_API_KEY="sk-..."
-IG_USERNAME="sua_conta_teste"
-IG_PASSWORD="sua_senha_teste"
+IG_USERNAME="your_test_account"
+IG_PASSWORD="your_test_password"
 ```
 
-## 6. Gestão de Risco & Limites (Safety)
+## 6. Risk Management & Limits (Safety)
 
-| Risco | Probabilidade | Mitigação Implementada |
+| Risk | Probability | Implemented Mitigation |
 | :--- | :--- | :--- |
-| **Shadowban** | Média | Limite rígido de 10 comments/dia. Conteúdo variado gerado por IA (sem repetição). |
-| **Bloqueio de Login** | Alta | Reuso de sessão (`session.json`). Não logar/deslogar repetidamente. |
-| **Detecção de Bot** | Média | Uso de IA Vision para comentários contextuais. Delays aleatórios (Jitter). |
-| **Banimento de IP** | Alta (em Cloud) | **Recomendação:** Rodar localmente (seu PC) ou usar Proxy 4G Residencial. Nunca usar IP de Datacenter (AWS/DigitalOcean). |
+| **Shadowban** | Medium | Rigid limit of 10 comments/day. Varied AI-generated content (no repetition). |
+| **Login Block** | High | Session reuse (`session.json`). Do not log in/out repeatedly. |
+| **Bot Detection** | Medium | Use Vision AI for contextual comments. Random delays (Jitter). |
+| **IP Ban** | High (in Cloud) | **Recommendation:** Run locally (your PC) or use Residential 4G Proxy. Never use Datacenter IPs (AWS/DigitalOcean). |

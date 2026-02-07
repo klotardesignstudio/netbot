@@ -9,7 +9,7 @@ from core.logger import logger
 # --- Structured Output Schema ---
 class PostAction(BaseModel):
     should_comment: bool = Field(..., description="Set to True if we should comment, False to skip (sensitive content/boring/irrelevant).")
-    comment_text: str = Field(..., description="The comment text. MUST be in Portuguese (Brazil). No hashtags. Max 1 emoji. Avoid generic phrases.")
+    comment_text: str = Field(..., description="The comment text. MUST be in English. No hashtags. Max 1 emoji. Avoid generic phrases.")
     reasoning: str = Field(..., description="Brief reason for the decision and the chosen comment.")
 
 class InstagramAgent:
@@ -28,7 +28,7 @@ class InstagramAgent:
         You are an Instagram User interacting with posts.
         Role: {persona.get('role', 'User')}
         Tone: {persona.get('tone', 'Casual')}
-        Language: {persona.get('language', 'pt-BR')}
+        Language: {persona.get('language', 'en-US')}
         
         Style Guidelines:
         {json.dumps(persona.get('style_guidelines', []), indent=2)}
