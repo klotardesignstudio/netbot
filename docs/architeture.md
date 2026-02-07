@@ -2,7 +2,7 @@
 
 **Versão:** 1.0 (Alpha - Testnet)  
 **Role:** Automação de Engajamento Humano  
-**Stack:** Python, Instagrapi, Agno (Phidata), OpenAI GPT-4o-mini, Supabase.
+**Stack:** Python, Playwright, Agno (Phidata), OpenAI GPT-4o-mini, Supabase.
 
 ## 1. Visão Geral do Produto
 
@@ -24,8 +24,8 @@ graph TD
     A -->|Gatilho| B[1. Discovery]
     B -->|Post Candidato| C[2. Preparation]
     C -->|Contexto Completo| D[3. Brain (Agno Agent)]
-    D -->|Structured Output| E[4. Execution (Instagrapi)]
-    E -->|Sucesso| F[5. Persistência (SQLite)]
+    D -->|Structured Output| E[4. Execution (Playwright)]
+    E -->|Sucesso| F[5. Persistência (Supabase)]
 ```
 
 ## 3. Detalhamento das Etapas (Pipeline)
@@ -45,7 +45,7 @@ graph TD
 ### 👁️ Etapa 2: Preparation (Preparação de Contexto)
 **Objetivo:** Agrupar as informações necessárias para o Agente.
 
-*   **Entrada:** Objeto `Media` do Instagrapi.
+*   **Entrada:** Objeto `Media` (Unified Format).
 *   **Contexto Visual:**
     *   Identificar URL da imagem/capa (O Agno baixa/processa automaticamente).
 *   **Contexto Social:**
@@ -79,10 +79,10 @@ graph TD
 *   **Validação de Segurança:**
     *   Se o Agente detectar conteúdo sensível (Luto, Tragédia, Política Extrema), `should_comment` será `False`.
 
-### 🤖 Etapa 4: Execution (Instagrapi API)
-**Objetivo:** Efetuar a ação na plataforma simulando um dispositivo móvel.
+### 🤖 Etapa 4: Execution (Playwright)
+**Objetivo:** Efetuar a ação na plataforma usando um navegador real.
 
-*   **Tecnologia:** Biblioteca `instagrapi` (emula um Samsung Galaxy S23).
+*   **Tecnologia:** `Playwright` (Chromium em modo Headless ou Headed).
 *   **Gestão de Sessão (Crítico):**
     *   Login realizado apenas uma vez.
     *   Sessão salva em `session.json`.
@@ -119,12 +119,12 @@ graph TD
 ├── /core
 │   ├── discovery.py        # Lógica de seleção de posts
 │   ├── brain.py            # Integração OpenAI (GPT-4o)
-│   ├── instagram_client.py # Wrapper do Instagrapi (Login/Session)
+│   ├── instagram_client.py # Client do Playwright (Navegação/Ações)
 │   ├── database.py         # Conexão SQLite
 │   └── logger.py           # [NEW] Configuração de Logs (Console + Arquivo)
 │
 ├── main.py                 # Arquivo principal (Orquestrador)
-├── requirements.txt        # Dependências (instagrapi, openai, etc)
+├── requirements.txt        # Dependências (playwright, openai, etc)
 ├── .env                    # Chaves de API (OpenAI, User/Pass)
 └── README.md               # Este arquivo
 ```
@@ -133,7 +133,8 @@ graph TD
 
 ### Dependências Python
 ```bash
-pip install instagrapi openai pillow schedule python-dotenv
+pip install playwright openai pillow schedule python-dotenv
+playwright install chromium
 ```
 
 ### Variáveis de Ambiente (.env)
