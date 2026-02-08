@@ -1,7 +1,7 @@
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Union
 from enum import Enum
+from typing import List, Optional, Dict, Any
 from datetime import datetime
+from pydantic import BaseModel, Field, HttpUrl
 
 class SocialPlatform(str, Enum):
     INSTAGRAM = "instagram"
@@ -11,8 +11,7 @@ class SocialPlatform(str, Enum):
     BLUESKY = "bluesky"
     DEVTO = "devto"
 
-@dataclass
-class SocialAuthor:
+class SocialAuthor(BaseModel):
     username: str
     platform: SocialPlatform
     id: Optional[str] = None
@@ -21,16 +20,14 @@ class SocialAuthor:
     profile_url: Optional[str] = None
     is_verified: bool = False
 
-@dataclass
-class SocialComment:
+class SocialComment(BaseModel):
     id: str
     author: SocialAuthor
     text: str
     created_at: Optional[datetime] = None
     like_count: int = 0
 
-@dataclass
-class SocialPost:
+class SocialPost(BaseModel):
     id: str
     platform: SocialPlatform
     author: SocialAuthor
@@ -39,7 +36,7 @@ class SocialPost:
     created_at: Optional[datetime] = None
     
     # Media
-    media_urls: List[str] = field(default_factory=list) # Images/Videos
+    media_urls: List[str] = Field(default_factory=list) # Images/Videos
     media_type: str = "text" # image, video, carousel, text
     
     # Interactions
@@ -48,11 +45,10 @@ class SocialPost:
     share_count: int = 0
     
     # Context
-    comments: List[SocialComment] = field(default_factory=list)
-    raw_data: Dict[str, Any] = field(default_factory=dict) # Original payload
+    comments: List[SocialComment] = Field(default_factory=list)
+    raw_data: Dict[str, Any] = Field(default_factory=dict) # Original payload
 
-@dataclass
-class ActionDecision:
+class ActionDecision(BaseModel):
     should_act: bool
     action_type: str = "comment" # comment, like, share
     content: Optional[str] = None # The comment text
