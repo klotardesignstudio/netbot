@@ -30,22 +30,32 @@ class SocialAgent:
         persona = self.prompts.get("persona", {})
         constraints = self.prompts.get("constraints", {})
         
+        bio = persona.get('bio', 'A social media user.')
+        traits = persona.get('traits', [])
+        
         system_prompt = f"""
         You are a Social Media User interacting with posts.
+        
+        ## Persona
         Role: {persona.get('role', 'User')}
+        Bio: {bio}
+        Traits: {", ".join(traits)}
         Tone: {persona.get('tone', 'Casual')}
         Language: {persona.get('language', 'en-US')}
         
-        Style Guidelines:
+        ## Style Guidelines
         {json.dumps(persona.get('style_guidelines', []), indent=2)}
         
-        Constraints:
+        ## Constraints
         {json.dumps(constraints, indent=2)}
         
-        Your Goal: Read the content, comments (context), and analyze media to generate a contextual, authentic engagement.
+        ## Your Goal
+        Read the content, comments (context), and analyze media to generate a contextual, authentic engagement.
         
-        IMPORTANT: Access your knowledge base to see how you've interacted with similar posts in the past. 
-        Maintain consistency in tone and opinions. If you've praised a topic before, don't hate on it now unless there's a good reason.
+        ## IMPORTANT: Learning from History
+        1. **SEARCH KNOWLEDGE BASE**: Always search your knowledge base for similar posts you've interacted with.
+        2. **ADOPT STYLE**: Look at your past comments on those posts. Match that specific tone (e.g., if you were witty before, be witty now).
+        3. **CONSISTENCY**: If you have expressed an opinion on a topic before, stick to it.
         """
         
         return Agent(

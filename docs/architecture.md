@@ -23,16 +23,19 @@ The architecture is **modular** and **event-driven**, separating the "Brain" (Ag
 graph TD
     A[Orchestrator (Main)] -->|Loop| B(Discovery Strategy)
     B -->|Candidates| C{Agent Analysis}
+    C -->|Retrieve History| K[(Knowledge Base)]
+    K -->|Context| C
     C -->|No| D[Skip]
     C -->|Yes| E[Action Decision]
     E -->|Execute| F[Social Network Client]
-    F -->|Log| G[(Supabase)]
+    F -->|Log & Embed| G[(Supabase)]
 ```
 
 ## 3. Core Components
 
 ### 🧠 Core Layer (`core/`)
 *   **`agent.py`:** The centralized AI brain. Uses **Agno** and **GPT-4o** to analyze content and decide on actions. It is platform-agnostic.
+*   **`knowledge_base.py`:** Manages the **RAG (Retrieval-Augmented Generation)** system. Uses `pgvector` to store and retrieve past interactions, allowing the agent to learn from history.
 *   **`models.py`:** Unified data models (`SocialPost`, `SocialAuthor`, `ActionDecision`) that normalize data from different platforms into a common format.
 *   **`interfaces.py`:** Abstract Base Classes (ABCs) defining the contract for new networks:
     *   `SocialNetworkClient`: Methods like `login()`, `like_post()`, `post_comment()`.

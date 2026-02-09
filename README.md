@@ -18,7 +18,10 @@
   - **Daily Limits:** Controlled via database to not exceed safe rates.
   - **Jitter (Random Intervals):** Variable pauses between actions (e.g., 10-50 min) to appear natural.
   - **Duplication Check:** Never interacts with the same post twice.
-- **☁️ Supabase Integration:** Stores interaction logs, daily statistics, and errors in the cloud.
+- **🧠 RAG Memory (Concept Learning):**
+  - Remembers past interactions (Vector DB).
+  - Learns from your previous comments to maintain a consistent style and opinion.
+- **☁️ Supabase Integration:** Stores interaction logs, vector embeddings, daily statistics, and errors in the cloud.
 
 ---
 
@@ -71,7 +74,10 @@ The project follows a **modular event-driven architecture**, designed to support
 
 ### 3. Customization
 - **VIPs:** VIP profile lists and Hashtags are in `config/`.
-- **Persona:** Edit prompts in `config/prompts.yaml` (if exists) or directly in `core/agent.py` to change the bot's personality.
+
+- **Persona:** 
+    - Edit `config/prompts.yaml` to defend your **Bio**, **Traits**, and **Tone**.
+    - **RAG Learning:** The bot remembers past interactions and adapts its style to match your previous comments.
 
 ### 4. Running
 ```bash
