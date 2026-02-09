@@ -31,8 +31,10 @@ class SocialAgent:
         try:
             with open(persona_path, "r", encoding="utf-8") as f:
                 persona_content = f.read()
+            logger.info(f"✅ Persona loaded from {persona_path} ({len(persona_content)} chars)")
+            logger.debug(f"Persona Preview: {persona_content[:100]}...")
         except Exception as e:
-            logger.error(f"Failed to load persona from {persona_path}: {e}")
+            logger.error(f"❌ Failed to load persona from {persona_path}: {e}")
             persona_content = "You are a helpful social media assistant."
 
         system_prompt = f"""
@@ -45,11 +47,18 @@ class SocialAgent:
         1. **OPINION OVER SOLUTION**: Do NOT try to solve complex coding problems or debugging issues in the comments. You are a senior engineer giving a "hot take" or advice, not a compiler.
         2. **AVOID HALLUCINATIONS**: If you don't know the specific details of a library or bug, do not invent them. Stick to high-level architectural advice or clean code principles.
         3. **SHORT & IMPACTFUL**: Your comments should be like a tweet or a short LinkedIn reply. High signal, low noise.
+        4. **NO GENERIC PRAISE**: Avoid comments like "Great design clarity!", "Love the aesthetics!", "Bridging tech and usability" or "Harmonizing aesthetics with performance". If you don't understand the post, choose NOT to comment.
+        5. **NEGATIVE CONSTRAINTS**:
+           - DO NOT use the phrase "design clarity".
+           - DO NOT use the phrase "bridging tech and usability".
+           - DO NOT use the phrase "harmonizing aesthetics".
+           - DO NOT use the word "tapestry".
         
         ## IMPORTANT: Learning from History
-        1. **SEARCH KNOWLEDGE BASE**: Always search your knowledge base for similar posts you've interacted with.
-        2. **ADOPT STYLE**: Look at your past comments on those posts. Match that specific tone (e.g., if you were witty before, be witty now).
-        3. **CONSISTENCY**: If you have expressed an opinion on a topic before, stick to it.
+        1. **SEARCH KNOWLEDGE BASE**: Search your knowledge base ONCE for similar posts you've interacted with.
+        2. **STOP SEARCHING**: If you find relevant examples, use them. If not, proceed with your best judgment. Do NOT search again.
+        3. **ADOPT STYLE**: Look at your past comments on those posts. Match that specific tone (e.g., if you were witty before, be witty now).
+        4. **CONSISTENCY**: If you have expressed an opinion on a topic before, stick to it.
         """
         
         return Agent(
@@ -86,10 +95,15 @@ class SocialAgent:
             logger.info(f"Agent analyzing post {post.id} by {post.author.username} on {post.platform.value}...")
             
             # Try to pass image URL directly in the prompt if available
+            image_url_log = "None"
             if post.media_urls:
                 # Assuming simple support for the first image for now
                 user_input += f"\n\nImage URL (for context): {post.media_urls[0]}"
+                image_url_log = post.media_urls[0]
             
+            # --- LOGGING WHAT THE AI SEES ---
+            logger.info(f"👀 AI INPUT DATA via {post.id}:\n   -> Content: {post.content[:200]}...\n   -> Image: {image_url_log}")
+
             # Run agent
             response_obj = self.agent.run(user_input)
             response: AgentOutput = response_obj.content

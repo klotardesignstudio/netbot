@@ -312,70 +312,93 @@ class InstagramClient(SocialNetworkClient):
         """Navigates to a post and extracts its data."""
         try:
             self.page.goto(f'https://www.instagram.com/p/{post_code}/', timeout=30000)
-            self._random_delay(1, 2)
+            self._random_delay(2, 3)
             
-            # Extract username from the post header
+            # --- Extract Username ---
             username = ""
-            username_selectors = [
-                'header a[role="link"]',
-                'header a[href*="/"]',
-                'a[href*="/"] span',
-                'article header a'
-            ]
-            for sel in username_selectors:
+            # Priority 1: The standard author link in header
+            header_author = self.page.query_selector('header a._a6hd, header a[role="link"]')
+            
+            if header_author:
+                username = header_author.inner_text().strip()
+            
+            if not username:
+                # Fallback: Check URL/Title or other links
                 try:
-                    el = self.page.query_selector(sel)
-                    if el:
-                        href = el.get_attribute('href')
-                        if href and '/' in href:
-                            username = href.strip('/').split('/')[-1]
-                            if username and username not in ['p', 'explore', 'reels']:
-                                break
+                    meta_author = self.page.query_selector('meta[property="og:title"]')
+                    if meta_author:
+                        content = meta_author.get_attribute('content')
+                        if content and ' on Instagram' in content:
+                            username = content.split(' on Instagram')[0].strip()
                 except:
-                    continue
+                    pass
+
+            logger.info(f"[{post_code}] Extracted username: '{username}'")
             
-            logger.info(f"Extracted username: {username}")
-            
-            # Extract caption - try multiple approaches
+            # --- Extract Caption ---
             caption = ""
-            caption_selectors = [
-                'h1',
-                'article h1',
-                'div[role="button"] span',
-                'article span[dir="auto"]',
-                'ul li span[dir="auto"]',
-                'article div > span'
-            ]
-            for sel in caption_selectors:
-                try:
-                    el = self.page.query_selector(sel)
-                    if el:
-                        text = el.inner_text()
-                        if text and len(text) > 10:  # Ignore very short texts
-                            caption = text
-                            break
-                except:
-                    continue
+            # Priority 1: The main caption container (often h1 or first item in comments list)
+            # Instagram often puts caption in a span inside a div._a9zs or similar
             
-            # If still no caption, try getting all visible text from the post area
+            # Try H1 first (often used for accessibility)
+            h1_el = self.page.query_selector('h1')
+            if h1_el:
+                caption = h1_el.inner_text()
+            
             if not caption:
+                # Try standard caption container class
+                caption_el = self.page.query_selector('div._a9zs span, span._ap3a._aaco._aacu._aacx._aad7._aade')
+                if caption_el:
+                    caption = caption_el.inner_text()
+            
+            if not caption:
+                # Fallback: Get text from the first comment-like structure if it matches author
                 try:
-                    # Get text from the right side panel (where caption usually is)
-                    panel = self.page.query_selector('article section, article > div > div:nth-child(2)')
-                    if panel:
-                        caption = panel.inner_text()[:500]  # Limit to 500 chars
+                    first_comment_area = self.page.query_selector('ul._a9z6, ul.x78zum5, div.x78zum5.xdt5ytf')
+                    if first_comment_area:
+                        # Sometimes the first li is the caption
+                        first_item = first_comment_area.query_selector('li')
+                        if first_item:
+                            text_el = first_item.query_selector('span._aacl._aaco._aacu._aacx._aad7._aade, span')
+                            if text_el:
+                                caption = text_el.inner_text()
                 except:
                     pass
             
-            logger.info(f"Extracted caption ({len(caption)} chars): {caption[:100]}...")
+            if not caption:
+                # Ultimate Fallback: Open Graph Description
+                # Format: "Likes, Comments - Username on Date: \"Caption\"."
+                try:
+                    og_desc_el = self.page.query_selector('meta[property="og:description"]')
+                    if og_desc_el:
+                        og_content = og_desc_el.get_attribute('content')
+                        if og_content and ': "' in og_content:
+                            # Extract everything after the first occurrences of ': "'
+                            # and remove the trailing '"' or '".'
+                            parts = og_content.split(': "', 1)
+                            if len(parts) > 1:
+                                raw_unique_caption = parts[1]
+                                # Remove trailing quote and dot if present
+                                if raw_unique_caption.endswith('".'):
+                                    caption = raw_unique_caption[:-2]
+                                elif raw_unique_caption.endswith('"'):
+                                    caption = raw_unique_caption[:-1]
+                                else:
+                                    caption = raw_unique_caption
+                                logger.info(f"[{post_code}] Extracted caption from og:description")
+                except Exception as e:
+                    logger.warning(f"Failed to extract from og:description: {e}")
+
+            # Log the caption for debugging
+            log_caption = caption[:100].replace('\n', ' ') + "..." if len(caption) > 100 else caption.replace('\n', ' ')
+            logger.info(f"[{post_code}] Extracted caption: '{log_caption}'")
             
-            # Extract image URL
+            # --- Extract Image URL ---
             image_url = None
             img_selectors = [
+                'div._aagv img',           # Standard post image
                 'article img[src*="instagram"]',
-                'article img[src*="cdninstagram"]',
-                'img[src*="scontent"]',
-                'article img',
+                'img[src*="cdninstagram"]',
                 'div[role="button"] img'
             ]
             for sel in img_selectors:
@@ -389,9 +412,21 @@ class InstagramClient(SocialNetworkClient):
                 except:
                     continue
             
-            logger.info(f"Extracted image URL: {image_url[:50] if image_url else 'None'}...")
+            if not image_url:
+                # Fallback: Open Graph Image
+                try:
+                    og_image_el = self.page.query_selector('meta[property="og:image"]')
+                    if og_image_el:
+                        og_image_url = og_image_el.get_attribute('content')
+                        if og_image_url and 'http' in og_image_url:
+                            image_url = og_image_url
+                            logger.info(f"[{post_code}] Extracted image URL from og:image")
+                except:
+                    pass
             
-            # Extract comments
+            logger.info(f"[{post_code}] Extracted image URL: {image_url[:50] if image_url else 'None'}...")
+            
+            # --- Extract Comments ---
             comments = self._get_post_comments()
             
             return {

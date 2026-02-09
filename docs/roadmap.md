@@ -25,8 +25,8 @@
 ### 1. O Cérebro (Knowledge Base & RAG)
 *Transformar o bot de um "GPT Genérico" para o "Seu Gêmeo Digital".*
 * **Funcionalidades:**
-    * [ ] **RAG Engine (`core/knowledge_base.py`):** Sistema de busca semântica (`pgvector`) para o Agente consultar "Como o Guilherme responderia isso?".
-    * [ ] **Agent Update:** Atualizar o `core/agent.py` para consultar a `KnowledgeBase` antes de chamar a OpenAI.
+    * [x] **RAG Engine (`core/knowledge_base.py`):** Sistema de busca semântica (`pgvector`) para o Agente consultar "Como o Guilherme responderia isso?".
+    * [x] **Agent Update:** Atualizar o `core/agent.py` para consultar a `KnowledgeBase` antes de chamar a OpenAI.
 
 ### 2. A Empatia (Audience Awareness) **[NOVO]**
 *Entender quem está do outro lado para adaptar o tom (Code Switching).*

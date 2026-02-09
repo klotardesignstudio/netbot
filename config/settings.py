@@ -11,6 +11,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 
 class Settings:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    CONFIG_DIR = BASE_DIR / "config"
+
     # API Keys
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     IG_USERNAME = os.getenv("IG_USERNAME")
@@ -30,7 +33,7 @@ class Settings:
     PROXY_URL = os.getenv("PROXY_URL", None)
     
     # Debug mode - show browser window
-    DEBUG_HEADLESS = os.getenv("DEBUG_HEADLESS", "True").lower() == "true"
+    DEBUG_HEADLESS = os.getenv("DEBUG_HEADLESS", "False").lower()
 
     # Files
     VIP_LIST_PATH = CONFIG_DIR / "vip_list.json"
