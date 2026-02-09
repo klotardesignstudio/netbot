@@ -9,20 +9,21 @@ import logging
 from typing import Optional, Dict, Any, List
 from config.settings import settings
 from core.database import db
-from core.instagram_client import client
+from core.networks.instagram.client import client
+from core.interfaces import DiscoveryStrategy
+from core.models import SocialPost
 
 logger = logging.getLogger(__name__)
 
 
-class DiscoveryEngine:
+class InstagramDiscovery(DiscoveryStrategy):
     def __init__(self):
         self.vip_list = settings.load_vip_list()
         self.hashtags = settings.load_hashtags()
 
-    def get_candidate_posts(self, limit: int = 5) -> List[Dict[str, Any]]:
+    def find_candidates(self, limit: int = 5) -> List[SocialPost]:
         """
         Returns a list of candidate posts to try interacting with.
-        This allows the main loop to retry if one post fails.
         """
         candidates = []
         
@@ -43,52 +44,52 @@ class DiscoveryEngine:
         
         # Filter valid ones
         valid_candidates = [
-            media for media in candidates 
-            if self._is_valid_candidate(media)
+            post for post in candidates 
+            if self.validate_candidate(post)
         ]
         
         return valid_candidates
 
-    def _fetch_from_vip(self, amount: int) -> List[Dict[str, Any]]:
+    def _fetch_from_vip(self, amount: int) -> List[SocialPost]:
         """Pick a random VIP and get their latest posts."""
         target_user = random.choice(self.vip_list)
         logger.info(f"Discovery: Checking VIP @{target_user}")
         
         # Fetch more to allow for filtering
-        return client.get_user_latest_medias(target_user, amount=amount)
+        return client.get_user_latest_posts(target_user, limit=amount)
 
-    def _fetch_from_discovery(self, amount: int) -> List[Dict[str, Any]]:
+    def _fetch_from_discovery(self, amount: int) -> List[SocialPost]:
         """Pick a random hashtag and get top posts."""
         target_tag = random.choice(self.hashtags)
         logger.info(f"Discovery: Checking Hashtag #{target_tag}")
         
         # Fetch more to allow for filtering
-        medias = client.get_hashtag_top_medias(target_tag, amount=amount)
-        random.shuffle(medias)
-        return medias
+        # Note: client.search_posts wraps get_hashtag_top_medias
+        posts = client.search_posts(target_tag, limit=amount)
+        random.shuffle(posts)
+        return posts
 
-    def _is_valid_candidate(self, media: Dict[str, Any]) -> bool:
+    def validate_candidate(self, post: SocialPost) -> bool:
         """Filters out posts that are already interacted or owned by us."""
-        media_id = media.get('media_id') or media.get('pk') or media.get('code')
-        
-        if not media_id:
+        if not post.id:
             return False
             
-        # Check DB first
-        if db.check_if_interacted(media_id):
-            logger.debug(f"Skipping {media_id}: Already interacted.")
+        # Check DB first (TODO: Update DB to support platform check)
+        # For now, we assume global ID uniqueness or collision risk is low enough for MVP refactor
+        if db.check_if_interacted(post.id, post.platform.value):
+            logger.debug(f"Skipping {post.id}: Already interacted.")
             return False
 
         # Ignore if it's our own post
-        if media.get('username') == settings.IG_USERNAME:
+        if post.author.username == settings.IG_USERNAME:
             return False
         
-        # Ignore if no caption (agent can't do much)
-        if not media.get('caption') and not media.get('image_url'):
-            logger.debug(f"Skipping {media_id}: No caption/image context.")
+        # Ignore if no caption AND no image (agent can't do much)
+        if not post.content and not post.media_urls:
+            logger.debug(f"Skipping {post.id}: No caption/image context.")
             return False
             
         return True
 
 
-discovery = DiscoveryEngine()
+discovery = InstagramDiscovery()

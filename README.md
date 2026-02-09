@@ -18,19 +18,24 @@
   - **Daily Limits:** Controlled via database to not exceed safe rates.
   - **Jitter (Random Intervals):** Variable pauses between actions (e.g., 10-50 min) to appear natural.
   - **Duplication Check:** Never interacts with the same post twice.
-- **☁️ Supabase Integration:** Stores interaction logs, daily statistics, and errors in the cloud.
+- **🧠 RAG Memory (Concept Learning):**
+  - Remembers past interactions (Vector DB).
+  - Learns from your previous comments to maintain a consistent style and opinion.
+- **☁️ Supabase Integration:** Stores interaction logs, vector embeddings, daily statistics, and errors in the cloud.
 
 ---
 
 ## 🏗️ Project Architecture
 
-The project is modular and separated into clear responsibilities:
+The project follows a **modular event-driven architecture**, designed to support multiple social platforms with a shared AI brain.
 
-- **`core/agent.py` (The Brain):** Where the AI magic happens. Defines the bot's "Persona" and uses OpenAI to decide *if* it should comment and *what* to comment.
-- **`core/instagram_client.py` (The Body):** Controls the browser via Playwright. Handles CSS selectors, login, data extraction, and action execution (Like/Comment).
-- **`core/discovery.py` (The Explorer):** Defines the post search strategy (VIPs vs Hashtags) and filters invalid candidates.
-- **`core/database.py` (The Memory):** Manages data persistence in Supabase.
-- **`main.py` (The Conductor):** Main loop that orchestrates interaction cycles and manages rest times.
+- **`core/agent.py` (The Brain):** Platform-agnostic AI agent. Uses OpenAI/Agno to analyze content and decide on actions, regardless of the source network.
+- **`core/interfaces.py` (The Contracts):** Defines abstract base classes (`SocialNetworkClient`, `DiscoveryStrategy`) that all network modules must implement.
+- **`core/networks/` (The Limbs):** Contains platform-specific implementations.
+  - **`instagram/client.py`:** Controls the browser via Playwright for Instagram.
+  - **`instagram/discovery.py`:** Finds candidates on Instagram (VIPs vs Hashtags).
+- **`core/database.py` (The Memory):** Manages data persistence in Supabase, tracking interactions across all platforms.
+- **`main.py` (The Conductor):** Main loop that orchestrates interaction cycles for all enabled networks.
 
 ---
 
@@ -69,7 +74,10 @@ The project is modular and separated into clear responsibilities:
 
 ### 3. Customization
 - **VIPs:** VIP profile lists and Hashtags are in `config/`.
-- **Persona:** Edit prompts in `config/prompts.yaml` (if exists) or directly in `core/agent.py` to change the bot's personality.
+
+- **Persona:** 
+    - Edit `config/prompts.yaml` to defend your **Bio**, **Traits**, and **Tone**.
+    - **RAG Learning:** The bot remembers past interactions and adapts its style to match your previous comments.
 
 ### 4. Running
 ```bash

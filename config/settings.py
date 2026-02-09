@@ -11,12 +11,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 
 class Settings:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    CONFIG_DIR = BASE_DIR / "config"
+
     # API Keys
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     IG_USERNAME = os.getenv("IG_USERNAME")
     IG_PASSWORD = os.getenv("IG_PASSWORD")
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    # Postgres Connection for Agno KnowledgeBase (SQLAlchemy)
+    PG_DATABASE_URL = os.getenv("PG_DATABASE_URL")
 
     # Bot Limits
     daily_interaction_limit = int(os.getenv("DAILY_INTERACTION_LIMIT", "2"))
@@ -28,7 +33,7 @@ class Settings:
     PROXY_URL = os.getenv("PROXY_URL", None)
     
     # Debug mode - show browser window
-    DEBUG_HEADLESS = os.getenv("DEBUG_HEADLESS", "True").lower() == "true"
+    DEBUG_HEADLESS = os.getenv("DEBUG_HEADLESS", "False").lower()
 
     # Files
     VIP_LIST_PATH = CONFIG_DIR / "vip_list.json"

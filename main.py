@@ -1,147 +1,190 @@
 """
-NetBot - Instagram AI Persona
+NetBot - Omnichannel AI Persona
 
-Main entry point for the Instagram engagement bot.
-Uses Playwright for browser automation and GPT-4o for content analysis.
+Main entry point for the engagement bot.
+Orchestrates multiple social network clients and the central AI agent.
 """
 import time
 import random
 import signal
 import sys
-from datetime import datetime
+from typing import List
 from config.settings import settings
 from core.database import db
-from core.instagram_client import client
-from core.discovery import discovery
-from core.agent import agent
+from core.agent import SocialAgent # Class import only
 from core.logger import logger
+from core.interfaces import SocialNetworkClient, DiscoveryStrategy
 
+# Networks
+from core.networks.instagram.client import client as instagram_client
+from core.networks.instagram.discovery import discovery as instagram_discovery
 
-def run_cycle():
-    """Single execution cycle."""
-    logger.info("--- Starting Cycle ---")
+class AgentOrchestrator:
+    def __init__(self):
+        self.networks: List[dict] = []
+        self.agent = SocialAgent()
+        self._setup_networks()
+        self.running = True
 
-    # 1. Check Daily Limit
-    current_count = db.get_daily_count()
-    if current_count >= settings.daily_interaction_limit:
-        logger.info(f"Daily limit reached ({current_count}/{settings.daily_interaction_limit}). Sleeping...")
-        return
+    def _setup_networks(self):
+        """Register enabled networks."""
+        # In the future, this could be dynamic based on settings
+        self.networks.append({
+            "name": "Instagram",
+            "client": instagram_client,
+            "discovery": instagram_discovery
+        })
 
-    # 2. Discovery (get multiple candidates)
-    candidates = discovery.get_candidate_posts(limit=5)
-    
-    if not candidates:
-        logger.info("No valid candidates found in this batch. Skipping cycle.")
-        return
-
-    logger.info(f"Discovery found {len(candidates)} potential candidates. Analyzing...")
-
-    # Iterate through candidates until one succeeds
-    interacted = False
-    
-    for i, candidate in enumerate(candidates):
-        try:
-            logger.info(f"--- Analyzing Candidate {i+1}/{len(candidates)}: {candidate['code']} ---")
-            
-            # 3. Agent Analysis & Decision
-            action = agent.decide_and_comment(candidate)
-            
-            # 4. Action
-            if action and action.should_comment:
-                logger.info(f"Decided to comment: {action.comment_text}")
-                
-                # Get media ID
-                media_id = candidate['media_id'] # Simplified since discovery filters valid ones
-                
-                # 1. Like the post first
-                client.like_post(media_id)
-                # Small human pause
-                time.sleep(random.uniform(1, 2))
-                
-                # 2. Post comment
-                success = client.post_comment(media_id, action.comment_text)
-                
-                if success:
-                    # 5. Log & Persist
-                    db.log_interaction(
-                        post_id=media_id,
-                        username=candidate['username'],
-                        comment_text=action.comment_text,
-                        metadata={"reasoning": action.reasoning}
-                    )
-                    
-                    interacted = True
-                    # 6. Random Sleep (Jitter) after successful action
-                    sleep_time = random.randint(settings.min_sleep_interval, settings.max_sleep_interval)
-                    logger.info(f"Interaction successful. Sleeping for {sleep_time} seconds ({sleep_time/60:.1f} min)...")
-                    time.sleep(sleep_time)
-                    break # Stop processing candidates for this cycle
-                else:
-                    logger.error("Failed to post comment. Trying next candidate...")
-            else:
-                logger.info(f"Skipped post. Reason: {action.reasoning if action else 'No action'}")
-                # Continue to next candidate
+    def start(self):
+        """Main execution loop."""
+        logger.info("🤖 NetBot Orchestrator Initialized")
         
+        # Verify DB connection
+        try:
+            # We check total interactions for now, platform specific breakdown is in logs
+            # This is a bit of a hack until we update get_daily_count to be cleaner in main
+            count = db.get_daily_count(platform="instagram") 
+            logger.info(f"Connected to Supabase. Daily count (IG): {count}")
         except Exception as e:
-            logger.error(f"Error processing candidate {candidate.get('code', 'unknown')}: {e}")
-            continue
+            logger.error(f"Failed to connect to DB: {e}. Check .env keys.")
+            return
 
-    if not interacted:
-        logger.info("Finished analyzing all candidates. No interaction made.")
+        # Start Clients
+        for net in self.networks:
+            client: SocialNetworkClient = net["client"]
+            if not client.login():
+                logger.error(f"Failed to login to {net['name']}. Removing from active list.")
+                self.networks.remove(net)
 
+        if not self.networks:
+            logger.error("No active networks. Exiting.")
+            return
 
-def cleanup(signum=None, frame=None):
-    """Cleanup browser on exit."""
-    logger.info("Shutting down browser...")
-    try:
-        client.stop()
-    except:
-        pass
-    sys.exit(0)
+        if settings.dry_run:
+            logger.warning("⚠️ MODE: DRY RUN (No comments will be posted)")
 
-
-def main():
-    logger.info("🤖 Instagram AI Persona Initialized (Playwright Mode)")
-    
-    # Register cleanup handler
-    signal.signal(signal.SIGINT, cleanup)
-    signal.signal(signal.SIGTERM, cleanup)
-    
-    # Verify DB connection on startup
-    try:
-        count = db.get_daily_count()
-        logger.info(f"Connected to Supabase. Daily count: {count}")
-    except Exception as e:
-        logger.error(f"Failed to connect to DB: {e}. Check .env keys.")
-        return
-
-    # Start browser and login
-    if not client.login():
-        logger.error("Failed to login to Instagram. Exiting.")
-        return
-
-    if settings.dry_run:
-        logger.warning("⚠️ MODE: DRY RUN (No comments will be posted)")
-
-    # Main Loop
-    try:
-        while True:
+        # Loop
+        while self.running:
             try:
-                run_cycle()
+                self.run_cycle()
                 
-                # Short sleep between cycles
+                # Sleep between cycles
                 short_sleep = random.randint(60, 300)  # 1-5 mins
                 logger.info(f"Cycle finished. Waiting {short_sleep}s before next check...")
                 time.sleep(short_sleep)
                 
             except KeyboardInterrupt:
-                raise
+                self.stop()
             except Exception as e:
                 logger.exception(f"Error in main loop: {e}")
-                time.sleep(60)  # Prevent rapid crash loops
-    finally:
-        cleanup()
+                time.sleep(60)
+
+    def run_cycle(self):
+        """Single execution cycle across all networks."""
+        logger.info("--- Starting Cycle ---")
+
+        for net in self.networks:
+            name = net["name"]
+            client: SocialNetworkClient = net["client"]
+            discovery: DiscoveryStrategy = net["discovery"]
+            
+            # Check Limits (Per platform)
+            current_count = db.get_daily_count(platform=client.platform.value)
+            if current_count >= settings.daily_interaction_limit:
+                logger.info(f"[{name}] Daily limit reached ({current_count}/{settings.daily_interaction_limit}). Skipping...")
+                continue
+
+            # Discovery
+            logger.info(f"[{name}] Discovery started...")
+            candidates = discovery.find_candidates(limit=5)
+            
+            if not candidates:
+                logger.info(f"[{name}] No candidates found.")
+                continue
+
+            # Attempt Interaction
+            interacted = False
+            for i, post in enumerate(candidates):
+                try:
+                    logger.info(f"[{name}] Analyzing Post {i+1}/{len(candidates)}: {post.id}")
+                    
+                    # Agent Analysis
+                    decision = self.agent.decide_and_comment(post)
+                    
+                    if decision.should_act:
+                        logger.info(f"[{name}] Decided to ACT: {decision.content}")
+                        
+                        # Execute Action
+                        client.like_post(post)
+                        time.sleep(random.uniform(1, 2))
+                        
+                        success = client.post_comment(post, decision.content)
+                        
+                        if success:
+                            # Log
+                            db.log_interaction(
+                                post_id=post.id,
+                                username=post.author.username,
+                                comment_text=decision.content,
+                                platform=client.platform.value,
+                                metadata={"reasoning": decision.reasoning}
+                            )
+                            
+                            # --- LIVE LEARNING (RAG) ---
+                            # Immediately save to KnowledgeBase so we remember this context
+                            try:
+                                content_text = f"Interaction on {client.platform.value}:\nUser: @{post.author.username}\nMy Comment: \"{decision.content}\"\nReasoning: {decision.reasoning}"
+                                self.agent.knowledge_base.insert(
+                                    name=f"interaction_{post.id}",
+                                    text_content=content_text,
+                                    metadata={
+                                        "post_id": post.id,
+                                        "platform": client.platform.value,
+                                        "username": post.author.username,
+                                        "created_at": "now" # In a real scenario, use datetime
+                                    },
+                                    upsert=True
+                                )
+                                logger.info(f"[{name}] 🧠 Interaction saved to memory (RAG).")
+                            except Exception as e:
+                                logger.error(f"[{name}] Failed to save to memory: {e}")
+                            # ---------------------------
+                            
+                            interacted = True
+                            
+                            # Jitter
+                            sleep_time = random.randint(settings.min_sleep_interval, settings.max_sleep_interval)
+                            logger.info(f"[{name}] Interaction successful. Sleeping {sleep_time}s...")
+                            time.sleep(sleep_time)
+                            break # Move to next network
+                        else:
+                            logger.error(f"[{name}] Failed to execute action.")
+                    else:
+                        logger.info(f"[{name}] Skipped. Reason: {decision.reasoning}")
+                
+                except Exception as e:
+                    logger.error(f"[{name}] Error processing candidate {post.id}: {e}")
+                    continue
+            
+            if not interacted:
+                logger.info(f"[{name}] Finished candidates with no interaction.")
+
+    def stop(self, signum=None, frame=None):
+        """Cleanup."""
+        logger.info("Shutting down...")
+        self.running = False
+        for net in self.networks:
+            try:
+                net["client"].stop()
+            except:
+                pass
+        sys.exit(0)
 
 
 if __name__ == "__main__":
-    main()
+    orchestrator = AgentOrchestrator()
+    
+    signal.signal(signal.SIGINT, orchestrator.stop)
+    signal.signal(signal.SIGTERM, orchestrator.stop)
+    
+    orchestrator.start()

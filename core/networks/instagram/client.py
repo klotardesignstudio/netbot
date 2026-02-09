@@ -7,6 +7,9 @@ Uses a real browser for all Instagram operations:
 - Comment posting
 - Profile/hashtag browsing for discovery
 """
+from core.interfaces import SocialNetworkClient
+from core.models import SocialPost, SocialAuthor, SocialPlatform, SocialComment
+from typing import Union
 import os
 import json
 import logging
@@ -23,7 +26,7 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
-class PlaywrightInstagramClient:
+class InstagramClient(SocialNetworkClient):
     """
     Instagram client using Playwright for browser automation.
     """
@@ -35,6 +38,10 @@ class PlaywrightInstagramClient:
         self.page: Optional[Page] = None
         self.session_path = Path("browser_state")
         self._is_logged_in = False
+    
+    @property
+    def platform(self) -> SocialPlatform:
+        return SocialPlatform.INSTAGRAM
     
     def _random_delay(self, min_sec: float = 1.0, max_sec: float = 3.0):
         """Human-like random delay."""
@@ -305,70 +312,93 @@ class PlaywrightInstagramClient:
         """Navigates to a post and extracts its data."""
         try:
             self.page.goto(f'https://www.instagram.com/p/{post_code}/', timeout=30000)
-            self._random_delay(1, 2)
+            self._random_delay(2, 3)
             
-            # Extract username from the post header
+            # --- Extract Username ---
             username = ""
-            username_selectors = [
-                'header a[role="link"]',
-                'header a[href*="/"]',
-                'a[href*="/"] span',
-                'article header a'
-            ]
-            for sel in username_selectors:
+            # Priority 1: The standard author link in header
+            header_author = self.page.query_selector('header a._a6hd, header a[role="link"]')
+            
+            if header_author:
+                username = header_author.inner_text().strip()
+            
+            if not username:
+                # Fallback: Check URL/Title or other links
                 try:
-                    el = self.page.query_selector(sel)
-                    if el:
-                        href = el.get_attribute('href')
-                        if href and '/' in href:
-                            username = href.strip('/').split('/')[-1]
-                            if username and username not in ['p', 'explore', 'reels']:
-                                break
+                    meta_author = self.page.query_selector('meta[property="og:title"]')
+                    if meta_author:
+                        content = meta_author.get_attribute('content')
+                        if content and ' on Instagram' in content:
+                            username = content.split(' on Instagram')[0].strip()
                 except:
-                    continue
+                    pass
+
+            logger.info(f"[{post_code}] Extracted username: '{username}'")
             
-            logger.info(f"Extracted username: {username}")
-            
-            # Extract caption - try multiple approaches
+            # --- Extract Caption ---
             caption = ""
-            caption_selectors = [
-                'h1',
-                'article h1',
-                'div[role="button"] span',
-                'article span[dir="auto"]',
-                'ul li span[dir="auto"]',
-                'article div > span'
-            ]
-            for sel in caption_selectors:
-                try:
-                    el = self.page.query_selector(sel)
-                    if el:
-                        text = el.inner_text()
-                        if text and len(text) > 10:  # Ignore very short texts
-                            caption = text
-                            break
-                except:
-                    continue
+            # Priority 1: The main caption container (often h1 or first item in comments list)
+            # Instagram often puts caption in a span inside a div._a9zs or similar
             
-            # If still no caption, try getting all visible text from the post area
+            # Try H1 first (often used for accessibility)
+            h1_el = self.page.query_selector('h1')
+            if h1_el:
+                caption = h1_el.inner_text()
+            
             if not caption:
+                # Try standard caption container class
+                caption_el = self.page.query_selector('div._a9zs span, span._ap3a._aaco._aacu._aacx._aad7._aade')
+                if caption_el:
+                    caption = caption_el.inner_text()
+            
+            if not caption:
+                # Fallback: Get text from the first comment-like structure if it matches author
                 try:
-                    # Get text from the right side panel (where caption usually is)
-                    panel = self.page.query_selector('article section, article > div > div:nth-child(2)')
-                    if panel:
-                        caption = panel.inner_text()[:500]  # Limit to 500 chars
+                    first_comment_area = self.page.query_selector('ul._a9z6, ul.x78zum5, div.x78zum5.xdt5ytf')
+                    if first_comment_area:
+                        # Sometimes the first li is the caption
+                        first_item = first_comment_area.query_selector('li')
+                        if first_item:
+                            text_el = first_item.query_selector('span._aacl._aaco._aacu._aacx._aad7._aade, span')
+                            if text_el:
+                                caption = text_el.inner_text()
                 except:
                     pass
             
-            logger.info(f"Extracted caption ({len(caption)} chars): {caption[:100]}...")
+            if not caption:
+                # Ultimate Fallback: Open Graph Description
+                # Format: "Likes, Comments - Username on Date: \"Caption\"."
+                try:
+                    og_desc_el = self.page.query_selector('meta[property="og:description"]')
+                    if og_desc_el:
+                        og_content = og_desc_el.get_attribute('content')
+                        if og_content and ': "' in og_content:
+                            # Extract everything after the first occurrences of ': "'
+                            # and remove the trailing '"' or '".'
+                            parts = og_content.split(': "', 1)
+                            if len(parts) > 1:
+                                raw_unique_caption = parts[1]
+                                # Remove trailing quote and dot if present
+                                if raw_unique_caption.endswith('".'):
+                                    caption = raw_unique_caption[:-2]
+                                elif raw_unique_caption.endswith('"'):
+                                    caption = raw_unique_caption[:-1]
+                                else:
+                                    caption = raw_unique_caption
+                                logger.info(f"[{post_code}] Extracted caption from og:description")
+                except Exception as e:
+                    logger.warning(f"Failed to extract from og:description: {e}")
+
+            # Log the caption for debugging
+            log_caption = caption[:100].replace('\n', ' ') + "..." if len(caption) > 100 else caption.replace('\n', ' ')
+            logger.info(f"[{post_code}] Extracted caption: '{log_caption}'")
             
-            # Extract image URL
+            # --- Extract Image URL ---
             image_url = None
             img_selectors = [
+                'div._aagv img',           # Standard post image
                 'article img[src*="instagram"]',
-                'article img[src*="cdninstagram"]',
-                'img[src*="scontent"]',
-                'article img',
+                'img[src*="cdninstagram"]',
                 'div[role="button"] img'
             ]
             for sel in img_selectors:
@@ -382,9 +412,21 @@ class PlaywrightInstagramClient:
                 except:
                     continue
             
-            logger.info(f"Extracted image URL: {image_url[:50] if image_url else 'None'}...")
+            if not image_url:
+                # Fallback: Open Graph Image
+                try:
+                    og_image_el = self.page.query_selector('meta[property="og:image"]')
+                    if og_image_el:
+                        og_image_url = og_image_el.get_attribute('content')
+                        if og_image_url and 'http' in og_image_url:
+                            image_url = og_image_url
+                            logger.info(f"[{post_code}] Extracted image URL from og:image")
+                except:
+                    pass
             
-            # Extract comments
+            logger.info(f"[{post_code}] Extracted image URL: {image_url[:50] if image_url else 'None'}...")
+            
+            # --- Extract Comments ---
             comments = self._get_post_comments()
             
             return {
@@ -428,8 +470,71 @@ class PlaywrightInstagramClient:
         
         return comments
     
+    def get_post_details(self, post_id: str) -> Optional[SocialPost]:
+        """Fetches full details of a specific post."""
+        data = self._get_post_data(post_id)
+        if not data:
+            return None
+            
+        # Convert to SocialPost
+        return SocialPost(
+            id=data['code'],
+            platform=self.platform,
+            author=SocialAuthor(
+                username=data['username'],
+                platform=self.platform
+            ),
+            content=data['caption'],
+            url=f"https://www.instagram.com/p/{data['code']}/",
+            media_urls=[data['image_url']] if data.get('image_url') else [],
+            media_type="image",
+            comments=[
+                SocialComment(
+                    id=f"temp_id_{i}",
+                    author=SocialAuthor(username=c['username'], platform=self.platform),
+                    text=c['text']
+                ) for i, c in enumerate(data.get('comments', []))
+            ],
+            raw_data=data
+        )
+
+    def get_user_latest_posts(self, username: str, limit: int = 5) -> List[SocialPost]:
+        """Fetches latest posts from a user's profile."""
+        raw_posts = self.get_user_latest_medias(username, amount=limit)
+        return [self._map_to_social_post(p) for p in raw_posts if p]
+
+    def search_posts(self, query: str, limit: int = 10) -> List[SocialPost]:
+        """Searches for posts (hashtags)."""
+        # Remove # if present
+        tag = query.replace("#", "")
+        raw_posts = self.get_hashtag_top_medias(tag, amount=limit)
+        return [self._map_to_social_post(p) for p in raw_posts if p]
+
+    def _map_to_social_post(self, data: Dict[str, Any]) -> SocialPost:
+        """Helper to convert raw dict to SocialPost."""
+        return SocialPost(
+            id=data['code'],
+            platform=self.platform,
+            author=SocialAuthor(
+                username=data['username'],
+                platform=self.platform
+            ),
+            content=data['caption'],
+            url=f"https://www.instagram.com/p/{data['code']}/",
+            media_urls=[data['image_url']] if data.get('image_url') else [],
+            media_type="image",
+            comments=[
+                SocialComment(
+                    id=f"temp_id_{i}",
+                    author=SocialAuthor(username=c['username'], platform=self.platform),
+                    text=c['text']
+                ) for i, c in enumerate(data.get('comments', []))
+            ],
+            raw_data=data
+        )
+
     def get_media_info(self, media_id: str) -> Optional[Dict[str, Any]]:
-        """Gets full details of a media by its code."""
+        """Deprecated: Use get_post_details instead."""
         return self._get_post_data(media_id)
     
     def get_media_comments(self, media_id: str, amount: int = 5) -> List[Dict[str, str]]:
@@ -439,8 +544,10 @@ class PlaywrightInstagramClient:
         self._random_delay(1, 2)
         return self._get_post_comments(amount)
     
-    def like_post(self, media_id: str) -> bool:
+    def like_post(self, post: Union[SocialPost, str]) -> bool:
         """Likes a post."""
+        media_id = post.id if isinstance(post, SocialPost) else post
+        
         if settings.dry_run:
             logger.info(f"[DRY RUN] Would like post {media_id}")
             return True
@@ -490,8 +597,10 @@ class PlaywrightInstagramClient:
             logger.error(f"Error liking post {media_id}: {e}")
             return False
     
-    def post_comment(self, media_id: str, text: str) -> bool:
+    def post_comment(self, post: Union[SocialPost, str], text: str) -> bool:
         """Posts a comment on a media."""
+        media_id = post.id if isinstance(post, SocialPost) else post
+        
         if settings.dry_run:
             logger.info(f"[DRY RUN] Would comment on {media_id}: {text}")
             return True
@@ -588,4 +697,4 @@ class PlaywrightInstagramClient:
 
 
 # Singleton instance
-client = PlaywrightInstagramClient()
+client = InstagramClient()
