@@ -26,31 +26,25 @@ class SocialAgent:
     def _create_agent(self) -> Agent:
         """Configures the Agno Agent with GPT-4o-mini."""
         
-        # Construct System Prompt from YAML
-        persona = self.prompts.get("persona", {})
-        constraints = self.prompts.get("constraints", {})
-        
-        bio = persona.get('bio', 'A social media user.')
-        traits = persona.get('traits', [])
-        
+        # Load Persona from Markdown
+        persona_path = settings.BASE_DIR / "docs" / "persona" / "persona.md"
+        try:
+            with open(persona_path, "r", encoding="utf-8") as f:
+                persona_content = f.read()
+        except Exception as e:
+            logger.error(f"Failed to load persona from {persona_path}: {e}")
+            persona_content = "You are a helpful social media assistant."
+
         system_prompt = f"""
-        You are a Social Media User interacting with posts.
-        
-        ## Persona
-        Role: {persona.get('role', 'User')}
-        Bio: {bio}
-        Traits: {", ".join(traits)}
-        Tone: {persona.get('tone', 'Casual')}
-        Language: {persona.get('language', 'en-US')}
-        
-        ## Style Guidelines
-        {json.dumps(persona.get('style_guidelines', []), indent=2)}
-        
-        ## Constraints
-        {json.dumps(constraints, indent=2)}
+        {persona_content}
         
         ## Your Goal
         Read the content, comments (context), and analyze media to generate a contextual, authentic engagement.
+        
+        ## IMPORTANT: BEHAVIOR GUIDELINES
+        1. **OPINION OVER SOLUTION**: Do NOT try to solve complex coding problems or debugging issues in the comments. You are a senior engineer giving a "hot take" or advice, not a compiler.
+        2. **AVOID HALLUCINATIONS**: If you don't know the specific details of a library or bug, do not invent them. Stick to high-level architectural advice or clean code principles.
+        3. **SHORT & IMPACTFUL**: Your comments should be like a tweet or a short LinkedIn reply. High signal, low noise.
         
         ## IMPORTANT: Learning from History
         1. **SEARCH KNOWLEDGE BASE**: Always search your knowledge base for similar posts you've interacted with.

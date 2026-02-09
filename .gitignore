@@ -34,3 +34,6 @@ storage/
 
 # Pytest
 .pytest_cache/
+
+# Documentation
+docs/persona/persona.md

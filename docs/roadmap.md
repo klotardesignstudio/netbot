@@ -1,85 +1,87 @@
-# 🚀 Evolution Roadmap: Omnichannel NetBot
+# 🗺️ Roadmap Atualizado: NetBot "Digital Twin"
 
-**Objective:** Transform NetBot from an Instagram agent into an **Omnichannel Digital Persona**, ubiquitous in Technology, Design, and Entrepreneurship communities.
-
----
-
-## 📍 Phase 1: Foundation & Visual (Status: Current)
-**Main Network:** 📸 **Instagram**
-**Focus:** Lifestyle Tech, Setups, Minimalist Design, and Visual Networking.
-
-* **Where we are:** Agent capable of "seeing" images and generating contextual comments.
-* **Next Steps:** Refine the *Discovery* strategy to focus more on Programming Reels (where engagement is high).
+**Status do Projeto:** 🟡 Em Transição (PoC → V1)
+**Visão:** Validar a "Alma" do bot com memória de longo prazo, inteligência social (análise de perfil) e expansão para redes de texto.
 
 ---
 
-## 📍 Phase 2: The Tech "Town Square" (Short Term)
-*The focus here is text, opinion, and speed. This is where the conversation happens.*
+## ✅ PoC: A Fundação (Onde Estamos)
+**Status:** **Concluído & Funcional**
+**Foco:** Infraestrutura Modular, Segurança e Visão Computacional.
 
-**Target Network:** 🧵 **Threads (The Natural Expansion)**
-Threads is Instagram's text-based "sibling". The dev community there is very active and less "toxic" than on X.
-* **Why:** Easiest network to add. Your Instagram followers are already there.
-* **Strategy:**
-    * Focus on "Lifestyle Dev" and "Quick Tips".
-    * Participate in *chains* like "show your setup" or "what's your stack".
-    * **Differentiator:** The bot can reference visual content from Instagram to start conversations in text.
-
-**Target Network:** ✖️ **X (formerly Twitter)**
-Still the global "pulse" of the development, Crypto/Web3, and Indie Hacker communities.
-* **Strategy:**
-    * Monitor hashtags like `#buildinpublic`, `#100DaysOfCode`, and `#SaaS`.
-    * Interact in threads from thought leaders (e.g., Vercel, OpenAI).
-    * **Differentiator:** Use the bot's vision to comment on code screenshots or interfaces posted by devs.
-
-**Secondary Network:** 🦋 **Bluesky**
-* **Why:** Massive migration of the Tech/Dev community (Python/Django) happened there.
-* **Strategy:** Fertile ground to position as an *early adopter* and build authority in a less saturated environment.
+* **Arquitetura:**
+    * [x] **Design Modular:** Estrutura definida para suportar múltiplos clientes (`core/networks`).
+    * [x] **Database:** Integração com Supabase para logs de interação e limites diários.
+* **Rede (Instagram):**
+    * [x] **Client Playwright:** Navegação humana, gestão de sessão e cookies.
+    * [x] **Vision AI:** Agente capaz de "ver" imagens para gerar contexto.
+    * [x] **Discovery:** Estratégia Híbrida (VIPs + Hashtags) implementada.
 
 ---
 
-## 📍 Phase 3: Career & B2B Authority (Medium Term)
-**Target Network:** 💼 **LinkedIn**
+## 🚧 V1: The "Digital Twin" & Social Intelligence (O Foco Agora)
+**Foco:** Implementar o "Cérebro" (RAG + Análise de Perfil) e expandir o "Corpo" (Threads/X).
 
-For the **Product Management, Startups, and Enterprise Tech** niche, this is the network with the highest financial value (*High Ticket Networking*).
+### 1. O Cérebro (Knowledge Base & RAG)
+*Transformar o bot de um "GPT Genérico" para o "Seu Gêmeo Digital".*
+* **Funcionalidades:**
+    * [ ] **RAG Engine (`core/knowledge_base.py`):** Sistema de busca semântica (`pgvector`) para o Agente consultar "Como o Guilherme responderia isso?".
+    * [ ] **Agent Update:** Atualizar o `core/agent.py` para consultar a `KnowledgeBase` antes de chamar a OpenAI.
 
-* **Strategy:**
-    * Focus on "Feature Launch" and "Career Reflections" posts.
-    * Avoid "Congratulations!", focusing on questions that spark debate ("Did you consider using X in that architecture?").
-    * **Risk/Reward:** High risk of detection, but a single lead here is worth 100 Instagram followers.
+### 2. A Empatia (Audience Awareness) **[NOVO]**
+*Entender quem está do outro lado para adaptar o tom (Code Switching).*
+* **Funcionalidades:**
+    * [ ] **Profile Scraper:** Criar método no Playwright para extrair Bio + Últimos 10 Posts/Comentários do perfil alvo (VIP ou Descoberta).
+    * [ ] **Dossier Generator:** Usar LLM para analisar esses 10 posts e gerar um resumo JSON:
+        * *Ex: "Perfil Técnico, valoriza Clean Code, tom sarcástico. Evite emojis excessivos."*
+    * [ ] **Context Injection:** Injetar esse "Dossier" no prompt do Agente para que a resposta seja personalizada para aquele interlocutor específico.
 
----
-
-## 📍 Phase 4: Technical Communities & Forums (Deep Niche)
-**Target Network:** 💻 **DEV Community (dev.to) & Hashnode**
-Modern versions of forums. This is where your `vip_list.json` consumes dense technical content.
-
-* **Why:** 100% qualified audience (Full Stack Developers).
-* **Strategy:** The Bot reads the article and posts a complementary technical comment or a genuine question. This builds massive **technical authority**.
-
-**Target Network:** 🍊 **Hacker News (Y Combinator)** & **Product Hunt**
-* **Focus:** Startups and Launches.
-* **Action:** Comment on SaaS tool launches, giving feedback on the value proposition.
-
----
-
-## 📍 Phase 5: Virality & Video (Long Term)
-**Target Network:** ▶️ **YouTube Shorts**
-
-Using the **Vision (GPT-4o)** capability we already have ready.
-
-* **Scenario:** "Quick Coding Tips" or "Tech Review" channels.
-* **Action:** The bot "watches" the video (takes frames), understands the tutorial, and comments something technical and specific.
-* **Impact:** Technical comments on educational videos tend to be pinned by creators (top of comments).
+### 3. O Corpo (Expansão de Texto)
+*Adaptação para redes onde a imagem é secundária.*
+* **Redes:** 🧵 **Threads** e ✖️ **X (Twitter)**.
+* **Funcionalidades:**
+    * [ ] **Refatoração:** Organizar estrutura de pastas para `core/networks/instagram`, `twitter`, etc.
+    * [ ] **Twitter Client:** Criar `core/networks/twitter` herdando da interface base.
+    * [ ] **Threads Client:** Criar `core/networks/threads`.
+    * [ ] **Text-Only Mode:** Calibrar o Agente para funcionar bem apenas com texto.
 
 ---
 
-## 📊 Value Matrix Summary (Updated)
+## 📅 V1.5: O Especialista (Comunidades)
+**Foco:** Interpretação de textos longos e construção de autoridade técnica.
 
-| Network | Technical Difficulty | Networking Value | Niche Fit |
-| :--- | :---: | :---: | :---: |
-| **Instagram** | ⭐⭐⭐ (Solved) | ⭐⭐ | ⭐⭐⭐ |
-| **Threads** | ⭐ (Very Low) | ⭐⭐⭐ | ⭐⭐⭐⭐ |
-| **X (Twitter)** | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **LinkedIn** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| **Dev.to / Hashnode** | ⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **Reddit** | ⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
+* **Redes:** 💻 **Dev.to** e 🤖 **Reddit**.
+* **Funcionalidades:**
+    * [ ] **Dev.to Client:** Ler artigos técnicos e gerar comentários complementares.
+    * [ ] **Reddit Client:** "Karma Farming" em subs pequenos.
+    * [ ] **Deep Reading:** Melhorar o RAG para lidar com artigos longos.
+
+---
+
+## 📅 V2: O Criador (Content Machine)
+**Foco:** Deixar de reagir e começar a publicar (Agente Ativo).
+
+* **Redes:** Todas as anteriores + **Hashnode**.
+* **Funcionalidades:**
+    * [ ] **Trend Watcher:** Monitorar Hacker News/GitHub Trending.
+    * [ ] **Agente Autor:** Escrever threads e artigos técnicos.
+    * [ ] **Cross-Posting:** Adaptar conteúdo entre redes.
+
+---
+
+## 📅 V3: Enterprise (High Ticket)
+**Foco:** Negócios e Carreira (B2B).
+
+* **Rede:** 👔 **LinkedIn**.
+* **Funcionalidades:**
+    * [ ] **LinkedIn Client:** Navegação ultra-segura.
+    * [ ] **Human-in-the-Loop:** Aprovação humana obrigatória.
+    * [ ] **Gestão de DMs:** Triagem de leads.
+
+---
+
+### 📝 Próximos Passos Técnicos (Prioridade V1)
+
+1.  **Database:** Ativar `vector` no Supabase.
+2.  **Profile Analyzer:** Criar o script que pega os 10 últimos posts de um usuário.
+3.  **Knowledge Base:** Implementar a classe de RAG.
