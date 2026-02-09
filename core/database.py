@@ -35,22 +35,10 @@ class Database:
             self.log_app_event("ERROR", "database", f"Failed to log interaction: {e}")
 
     def increment_daily_count(self, platform: str):
-        """Updates the daily_stats table for the specific platform."""
-        today = datetime.today().date().isoformat()
+        """Updates the daily_stats table for the specific platform atomically."""
         try:
-            res = self.client.table("daily_stats").select("*").eq("date", today).eq("platform", platform).execute()
-            if not res.data:
-                self.client.table("daily_stats").insert({
-                    "date": today,
-                    "platform": platform,
-                    "interaction_count": 1
-                }).execute()
-            else:
-                current_count = res.data[0]["interaction_count"]
-                self.client.table("daily_stats").update({
-                    "interaction_count": current_count + 1,
-                    "last_updated": datetime.now().isoformat()
-                }).eq("date", today).eq("platform", platform).execute()
+            # Call the atomic RPC function instead of read-then-write
+            self.client.rpc("increment_daily_stats", {"p_platform": platform}).execute()
         except Exception as e:
             logger.error(f"Error updating daily stats: {e}")
 

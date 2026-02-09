@@ -39,8 +39,8 @@ def test_log_interaction(mock_supabase):
     mock_supabase.table.assert_any_call("interactions")
     mock_supabase.table().insert.assert_called()
     
-    # Check increment_daily_count called (which calls daily_stats table)
-    mock_supabase.table.assert_any_call("daily_stats")
+    # Check increment_daily_stats RPC called
+    mock_supabase.rpc.assert_called_with("increment_daily_stats", {"p_platform": "instagram"})
 
 def test_check_if_interacted_false(mock_supabase):
     """Test interaction check returns False when no data found."""
