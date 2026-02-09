@@ -11,7 +11,7 @@ import sys
 from typing import List
 from config.settings import settings
 from core.database import db
-from core.agent import agent
+from core.agent import SocialAgent # Class import only
 from core.logger import logger
 from core.interfaces import SocialNetworkClient, DiscoveryStrategy
 
@@ -22,6 +22,7 @@ from core.networks.instagram.discovery import discovery as instagram_discovery
 class AgentOrchestrator:
     def __init__(self):
         self.networks: List[dict] = []
+        self.agent = SocialAgent()
         self._setup_networks()
         self.running = True
 
@@ -108,7 +109,7 @@ class AgentOrchestrator:
                     logger.info(f"[{name}] Analyzing Post {i+1}/{len(candidates)}: {post.id}")
                     
                     # Agent Analysis
-                    decision = agent.decide_and_comment(post)
+                    decision = self.agent.decide_and_comment(post)
                     
                     if decision.should_act:
                         logger.info(f"[{name}] Decided to ACT: {decision.content}")
@@ -128,6 +129,26 @@ class AgentOrchestrator:
                                 platform=client.platform.value,
                                 metadata={"reasoning": decision.reasoning}
                             )
+                            
+                            # --- LIVE LEARNING (RAG) ---
+                            # Immediately save to KnowledgeBase so we remember this context
+                            try:
+                                content_text = f"Interaction on {client.platform.value}:\nUser: @{post.author.username}\nMy Comment: \"{decision.content}\"\nReasoning: {decision.reasoning}"
+                                self.agent.knowledge_base.insert(
+                                    name=f"interaction_{post.id}",
+                                    text_content=content_text,
+                                    metadata={
+                                        "post_id": post.id,
+                                        "platform": client.platform.value,
+                                        "username": post.author.username,
+                                        "created_at": "now" # In a real scenario, use datetime
+                                    },
+                                    upsert=True
+                                )
+                                logger.info(f"[{name}] 🧠 Interaction saved to memory (RAG).")
+                            except Exception as e:
+                                logger.error(f"[{name}] Failed to save to memory: {e}")
+                            # ---------------------------
                             
                             interacted = True
                             

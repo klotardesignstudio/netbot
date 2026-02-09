@@ -6,6 +6,7 @@ from agno.models.openai import OpenAIChat
 from config.settings import settings
 from core.logger import logger
 from core.models import SocialPost, ActionDecision, SocialPlatform
+from core.knowledge_base import NetBotKnowledgeBase
 
 # --- Structured Output Schema ---
 # We reuse ActionDecision from models, but Agno might need a Pydantic model for output parsing
@@ -19,6 +20,7 @@ class AgentOutput(BaseModel):
 class SocialAgent:
     def __init__(self):
         self.prompts = settings.load_prompts()
+        self.knowledge_base = NetBotKnowledgeBase()
         self.agent = self._create_agent()
 
     def _create_agent(self) -> Agent:
@@ -41,6 +43,9 @@ class SocialAgent:
         {json.dumps(constraints, indent=2)}
         
         Your Goal: Read the content, comments (context), and analyze media to generate a contextual, authentic engagement.
+        
+        IMPORTANT: Access your knowledge base to see how you've interacted with similar posts in the past. 
+        Maintain consistency in tone and opinions. If you've praised a topic before, don't hate on it now unless there's a good reason.
         """
         
         return Agent(
@@ -48,6 +53,8 @@ class SocialAgent:
             description="Social Engagement Agent",
             instructions=system_prompt,
             output_schema=AgentOutput,
+            knowledge=self.knowledge_base,
+            search_knowledge=True,
             markdown=True
         )
 
@@ -101,4 +108,4 @@ class SocialAgent:
             logger.error(f"Agent Malfunction: {e}")
             return ActionDecision(should_act=False, reasoning=f"Error: {e}")
 
-agent = SocialAgent()
+# agent = SocialAgent() # Instantiation moved to main.py to avoid side effects on import

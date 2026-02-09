@@ -19,7 +19,8 @@ def mock_post():
 def mock_agent_dependencies():
     """Mocks settings and Agno Agent creation to avoid OpenAI calls."""
     with patch("core.agent.settings") as mock_settings, \
-         patch("core.agent.Agent") as mock_agno_agent_cls:
+         patch("core.agent.Agent") as mock_agno_agent_cls, \
+         patch("core.agent.NetBotKnowledgeBase") as mock_kb:
         
         # Mock settings.load_prompts
         mock_settings.load_prompts.return_value = {

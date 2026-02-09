@@ -17,6 +17,8 @@ class Settings:
     IG_PASSWORD = os.getenv("IG_PASSWORD")
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    # Postgres Connection for Agno KnowledgeBase (SQLAlchemy)
+    PG_DATABASE_URL = os.getenv("PG_DATABASE_URL")
 
     # Bot Limits
     daily_interaction_limit = int(os.getenv("DAILY_INTERACTION_LIMIT", "2"))
