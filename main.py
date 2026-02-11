@@ -124,18 +124,25 @@ class AgentOrchestrator:
         for cfg in self.platform_configs:
             name = cfg["name"]
 
-            # 1. Check daily limit BEFORE starting the browser
+            # 1. Determine requirements
             platform_value = cfg["platform"]
-            limit = settings.DAILY_LIMITS.get(platform_value, settings.daily_interaction_limit)
-            current_count = db.get_daily_count(platform=platform_value)
-            logger.info(f"[{name}] Daily interactions: {current_count}/{limit}")
+            
+            # Interactions Limit Check
+            interact_limit = settings.DAILY_LIMITS.get(platform_value, settings.daily_interaction_limit)
+            current_interactions = db.get_daily_count(platform=platform_value)
+            can_interact = current_interactions < interact_limit
+            
+            # Publications Availability Check
+            can_publish = self.editor.can_publish(platform_value)
+            
+            logger.info(f"[{name}] Activity: Interactions({current_interactions}/{interact_limit}) | Publishing({can_publish})")
 
-            if current_count >= limit:
-                logger.info(f"[{name}] Daily limit reached. Skipping...")
+            if not can_interact and not can_publish:
+                logger.info(f"[{name}] Limits reached for both interaction and publishing. Skipping...")
                 continue
 
             # 2. Start browser & login
-            logger.info(f"[{name}] Starting browser...")
+            logger.info(f"[{name}] Starting browser (Interaction={can_interact}, Pub={can_publish})...")
             client = cfg["client_class"]()
             if not client.login():
                 logger.error(f"[{name}] Failed to login. Skipping...")
@@ -143,12 +150,18 @@ class AgentOrchestrator:
                 continue
 
             # NEW: Step 3 - Content Publication (Editor Chef)
-            try:
-                self.editor.transform_and_publish(client)
-            except Exception as e:
-                logger.error(f"[{name}] Editor Chef failed: {e}")
+            if can_publish:
+                try:
+                    self.editor.transform_and_publish(client)
+                except Exception as e:
+                    logger.error(f"[{name}] Editor Chef failed: {e}")
 
-            # 3. Discovery
+            # 3. Discovery & Interaction
+            if not can_interact:
+                logger.info(f"[{name}] Interaction limit reached. Skipping discovery/comments.")
+                client.stop()
+                continue
+
             discovery = cfg["discovery_class"](client)
             logger.info(f"[{name}] Discovery started...")
             candidates = discovery.find_candidates(limit=5)
