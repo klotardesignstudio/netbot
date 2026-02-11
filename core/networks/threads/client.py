@@ -201,15 +201,21 @@ class ThreadsClient(SocialNetworkClient):
                 return None
 
             try:
-                self.page.click(post_btn_sel, timeout=7000)
+                # Use JS click as it is more robust against transparent overlays
+                self.page.evaluate(f"Array.from(document.querySelectorAll('div[role=\"button\"], button')).find(b => b.innerText.includes('Post')).click()")
+                logger.info("[Threads] JS Click triggered.")
             except Exception as e:
-                logger.warning(f"[Threads] Regular click failed/intercepted, forcing: {e}")
+                logger.warning(f"[Threads] JS Click failed, trying Playwright force click: {e}")
                 self.page.click(post_btn_sel, force=True)
             
-            # 4. Success check
-            self.page.wait_for_selector(editor_sel, state="hidden", timeout=10000)
-            logger.info("[Threads] ✅ New thread posted.")
-            return "success"
+            # 4. Success check (wait for composer to close)
+            try:
+                self.page.wait_for_selector(editor_sel, state="hidden", timeout=10000)
+                logger.info("[Threads] ✅ New thread posted.")
+                return "success"
+            except Exception as e:
+                logger.error(f"[Threads] Composer didn't close after click: {e}")
+                raise e
 
         except Exception as e:
             logger.error(f"[Threads] Error posting new content: {e}")

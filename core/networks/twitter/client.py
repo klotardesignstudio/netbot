@@ -312,16 +312,22 @@ class TwitterClient(SocialNetworkClient):
                 return None
 
             try:
-                self.page.click(send_btn_sel, timeout=7000)
+                # Use JS click to bypass any transparent overlays in #layers
+                self.page.evaluate(f"document.querySelector('{send_btn_sel}').click()")
+                logger.info("[Twitter] JS Click triggered.")
             except Exception as e:
-                logger.warning(f"[Twitter] Regular click failed/intercepted, forcing: {e}")
+                logger.warning(f"[Twitter] JS Click failed, trying Playwright force click: {e}")
                 self.page.click(send_btn_sel, force=True)
             
             # 4. Success check (wait for composer to close)
             # Both inline and modal usually disappear or empty out
-            self.page.wait_for_selector(editor_sel, state="hidden", timeout=10000)
-            logger.info("[Twitter] ✅ New tweet posted.")
-            return "success"
+            try:
+                self.page.wait_for_selector(editor_sel, state="hidden", timeout=10000)
+                logger.info("[Twitter] ✅ New tweet posted.")
+                return "success"
+            except Exception as e:
+                logger.error(f"[Twitter] Composer didn't close after click: {e}")
+                raise e
 
         except Exception as e:
             logger.error(f"[Twitter] Error posting new content: {e}")
