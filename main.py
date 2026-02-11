@@ -117,7 +117,8 @@ class AgentOrchestrator:
             if not client.login():
                 logger.error(f"[{name}] Failed to login. Skipping...")
                 client.stop()
-                BrowserManager.stop()
+                logger.error(f"[{name}] Failed to login. Skipping...")
+                client.stop()
                 continue
 
             # 3. Discovery
@@ -128,7 +129,8 @@ class AgentOrchestrator:
             if not candidates:
                 logger.info(f"[{name}] No candidates found.")
                 client.stop()
-                BrowserManager.stop()
+                logger.info(f"[{name}] No candidates found.")
+                client.stop()
                 continue
 
             # 4. Attempt Interaction
@@ -206,7 +208,9 @@ class AgentOrchestrator:
             # 5. Close browser & Playwright for this platform
             logger.info(f"[{name}] Closing browser...")
             client.stop()
-            BrowserManager.stop()
+            # 5. Close browser & Playwright for this platform
+            logger.info(f"[{name}] Closing browser...")
+            client.stop()
 
     def stop(self, signum=None, frame=None):
         """Cleanup."""

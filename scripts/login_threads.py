@@ -55,12 +55,14 @@ def setup_threads_login():
             )
             print("\n✅ Login detected!")
             
+            # Save browser state only on success
+            context.storage_state(path=str(session_path / "state_threads.json"))
+            print(f"\n💾 Session saved to: {session_path}/state_threads.json")
+            
         except Exception as e:
             print(f"\n⚠️ Timeout or error: {e}")
-        
-        # Save browser state
-        context.storage_state(path=str(session_path / "state_threads.json"))
-        print(f"\n💾 Session saved to: {session_path}/state_threads.json")
+            browser.close()
+            return False
         
         browser.close()
         

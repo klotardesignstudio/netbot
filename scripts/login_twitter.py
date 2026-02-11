@@ -48,18 +48,21 @@ def setup_twitter_login():
         
         try:
             # Wait for Home icon or Tweet button
+            # Wait for Home icon or Tweet button
             page.wait_for_selector(
                 'div[aria-label="Home"], a[aria-label="Home"]',
                 timeout=300000  # 5 minutes
             )
             print("\n✅ Login detected!")
             
+            # Save browser state only on success
+            context.storage_state(path=str(session_path / "state_twitter.json"))
+            print(f"\n💾 Session saved to: {session_path}/state_twitter.json")
+            
         except Exception as e:
             print(f"\n⚠️ Timeout or error: {e}")
-        
-        # Save browser state
-        context.storage_state(path=str(session_path / "state_twitter.json"))
-        print(f"\n💾 Session saved to: {session_path}/state_twitter.json")
+            browser.close()
+            return False
         
         browser.close()
         

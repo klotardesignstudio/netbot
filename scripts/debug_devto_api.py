@@ -7,7 +7,8 @@ load_dotenv()
 API_KEY = os.getenv("DEVTO_API_KEY")
 BASE_URL = "https://dev.to/api"
 
-print(f"🔑 Using API Key: {API_KEY[:4]}...{API_KEY[-4:] if API_KEY else 'None'}")
+masked_key = f"{API_KEY[:4]}...{API_KEY[-4:]}" if API_KEY else "None"
+print(f"🔑 Using API Key: {masked_key}")
 
 if not API_KEY:
     print("❌ Critical: No API Key found.")

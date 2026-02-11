@@ -99,12 +99,22 @@ class TwitterClient(SocialNetworkClient):
         """Cleanup."""
         if self.context:
             try:
-                self.session_path.mkdir(exist_ok=True)
+                self.session_path.mkdir(exist_ok=True, parents=True)
                 # self.context.storage_state(path=str(self.session_path / "state_twitter.json"))
+                self.context.close()
             except:
                 pass
         if self.browser:
-            self.browser.close()
+            try:
+                self.browser.close()
+            except: pass
+
+        self.page = None
+        self.context = None
+        self.browser = None
+        # Playwright instance is managed by BrowserManager, so we don't null it here? 
+        # Actually client just holds a reference, better to null it to be safe.
+        self.playwright = None
 
     def get_post_details(self, post_id: str) -> Optional[SocialPost]:
         """Fetches tweet details."""
@@ -162,13 +172,89 @@ class TwitterClient(SocialNetworkClient):
 
     def like_post(self, post: Union[SocialPost, str]) -> bool:
         """Likes a tweet."""
-        # TODO: Implement like logic using data-testid="like"
-        return True
+        if not self._start_browser(): return False
+        
+        try:
+            post_id = post.id if isinstance(post, SocialPost) else post
+            url = f"https://x.com/i/status/{post_id}"
+            if self.page.url != url:
+                self.page.goto(url)
+            
+            # Like button usually has data-testid="like"
+            # It might handle unliking too (check state)
+            like_btn_sel = 'button[data-testid="like"]'
+            unlike_btn_sel = 'button[data-testid="unlike"]'
+            
+            if self.page.is_visible(unlike_btn_sel):
+                logger.info(f"Already liked tweet {post_id}")
+                return True
+                
+            if self.page.is_visible(like_btn_sel):
+                self.page.click(like_btn_sel)
+                # Wait for change to unlike
+                try:
+                    self.page.wait_for_selector(unlike_btn_sel, timeout=5000)
+                    logger.info(f"Liked tweet {post_id}")
+                    return True
+                except:
+                    logger.warning(f"Like clicked but verification failed for {post_id}")
+                    return False
+            
+            logger.warning(f"Like button not found for {post_id}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error liking tweet {post_id}: {e}")
+            return False
 
     def post_comment(self, post: Union[SocialPost, str], text: str) -> bool:
         """Replies to a tweet."""
-        # TODO: Implement reply logic using data-testid="reply"
-        return True
+        if not self._start_browser(): return False
+
+        try:
+            post_id = post.id if isinstance(post, SocialPost) else post
+            url = f"https://x.com/i/status/{post_id}"
+            if self.page.url != url:
+                self.page.goto(url)
+            
+            # 1. Click Reply/Comment box
+            # Usually strict: [data-testid="reply"] opens modal? 
+            # Or the inline compose box [data-testid="tweetTextarea_0"] ?
+            
+            # Let's try the editor directly if visible, or click reply button
+            
+            # Strategy: Click the "Reply" button on the tweet first
+            reply_trigger = 'button[data-testid="reply"]'
+            if self.page.is_visible(reply_trigger):
+                self.page.click(reply_trigger)
+                self.page.wait_for_timeout(1000)
+            
+            # 2. Type text
+            editor_sel = 'div[data-testid="tweetTextarea_0"]'
+            self.page.wait_for_selector(editor_sel, timeout=5000)
+            self.page.click(editor_sel)
+            self.page.keyboard.type(text)
+            
+            # 3. Click Tweet/Reply button
+            send_btn_sel = 'button[data-testid="tweetButton"]'
+            self.page.wait_for_selector(send_btn_sel, timeout=5000)
+            
+            # Check if disabled
+            if self.page.is_disabled(send_btn_sel):
+                logger.warning("Reply button is disabled (maybe text too long?)")
+                return False
+                
+            self.page.click(send_btn_sel)
+            
+            # 4. Confirm success (modal closes or toast appears)
+            # Simplest: wait for send button to disappear
+            self.page.wait_for_selector(send_btn_sel, state="hidden", timeout=10000)
+            logger.info(f"Replied to {post_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error replying to {post_id}: {e}")
+            return False
     
     def get_profile_data(self, username: str) -> Optional[SocialProfile]:
         """Fetches X profile data."""

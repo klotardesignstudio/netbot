@@ -11,6 +11,7 @@ from pathlib import Path
 
 class DevToClient(SocialNetworkClient):
     BASE_URL = "https://dev.to/api"
+    REQUEST_TIMEOUT = 15
 
     @property
     def platform(self) -> SocialPlatform:
@@ -40,7 +41,7 @@ class DevToClient(SocialNetworkClient):
             return False
             
         try:
-            response = requests.get(f"{self.BASE_URL}/users/me", headers=self.headers)
+            response = requests.get(f"{self.BASE_URL}/users/me", headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 user_data = response.json()
                 logger.info(f"[DevTo] Authenticated as {user_data.get('username')}")
@@ -103,7 +104,7 @@ class DevToClient(SocialNetworkClient):
         """Fetches article details and recent comments for context."""
         try:
             # 1. Fetch Article Details
-            response = requests.get(f"{self.BASE_URL}/articles/{post_id}", headers=self.headers)
+            response = requests.get(f"{self.BASE_URL}/articles/{post_id}", headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code != 200:
                 logger.error(f"[DevTo] Failed to fetch article {post_id}: {response.status_code}")
                 return None
@@ -144,7 +145,7 @@ class DevToClient(SocialNetworkClient):
     def _fetch_comments(self, article_id: str, limit: int = 5) -> List[SocialComment]:
         """Fetches top-level comments for context."""
         try:
-            response = requests.get(f"{self.BASE_URL}/comments?a_id={article_id}", headers=self.headers)
+            response = requests.get(f"{self.BASE_URL}/comments?a_id={article_id}", headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 comments_data = response.json()
                 # Dev.to returns a tree. We just take top-level for now.
@@ -211,8 +212,8 @@ class DevToClient(SocialNetworkClient):
                  logger.info(f"[DevTo] Successfully liked {post.id}")
                  return True
             else:
-                 logger.warning("[DevTo] Like click seemed to fail verification.")
-                 return True 
+                 logger.warning(f"[DevTo] Like check failed for {post.id} after click.")
+                 return False 
 
         except Exception as e:
             logger.error(f"[DevTo] Error liking via browser: {e}")
@@ -269,7 +270,7 @@ class DevToClient(SocialNetworkClient):
                 "per_page": limit,
                 "state": "fresh" # fresh checking? or rising.
             }
-            response = requests.get(f"{self.BASE_URL}/articles", params=params, headers=self.headers)
+            response = requests.get(f"{self.BASE_URL}/articles", params=params, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 return self._parse_articles_list(response.json())
             return []
@@ -284,7 +285,7 @@ class DevToClient(SocialNetworkClient):
                 "username": username,
                 "per_page": limit
             }
-            response = requests.get(f"{self.BASE_URL}/articles", params=params, headers=self.headers)
+            response = requests.get(f"{self.BASE_URL}/articles", params=params, headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 return self._parse_articles_list(response.json())
             return []
@@ -324,15 +325,26 @@ class DevToClient(SocialNetworkClient):
         
     def get_profile_data(self, username: str) -> Optional[SocialProfile]:
         try:
-            response = requests.get(f"{self.BASE_URL}/users/by_username", params={"url": username}, headers=self.headers)
-            # Actually endpoint is /users/by_username?url={username} ?? No. 
-            # Correct is /users/by_username?username={username}
+            # Use the correct endpoint for fetching user by username
+            response = requests.get(
+                f"{self.BASE_URL}/users/by_username", 
+                params={"url": username}, 
+                headers=self.headers, 
+                timeout=self.REQUEST_TIMEOUT
+            )
             
-            response = requests.get(f"{self.BASE_URL}/users/by_username", params={"url": username}, headers=self.headers)
-            # Re-checking docs.. GET /users/by_username?url=... seems to be a specific lookup. 
-            # Let's try simple GET /users/{id} if we had ID, but we have username.
-            # Typically user object in article has most info.
-            # Let's stick to what we have or try parsing.
-            return None # Not critical for interactions right now
-        except:
+            if response.status_code == 200:
+                data = response.json()
+                return SocialProfile(
+                    username=data.get("username", username),
+                    platform=SocialPlatform.DEVTO,
+                    bio=data.get("summary") or data.get("website_url") or "",
+                    recent_posts=[] 
+                )
+            
+            logger.warning(f"[DevTo] Failed to fetch profile {username}: {response.status_code}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"[DevTo] Error fetching profile {username}: {e}")
             return None

@@ -99,12 +99,15 @@ class SocialAgent:
 
             # Determines constraints based on platform
             char_limit = "280 characters" if post.platform == SocialPlatform.TWITTER else "proportional to the post length"
+            
             if post.platform == SocialPlatform.TWITTER:
                 style_guide = "Style: Use abbreviations if needed, no hashtags unless relevant, casual but professional."
             elif post.platform == SocialPlatform.THREADS:
                 style_guide = "Style: Conversational, threading-friendly, casual."
             elif post.platform == SocialPlatform.LINKEDIN:
                 style_guide = "Style: Professional, constructive, slightly more formal."
+            elif post.platform == SocialPlatform.DEVTO:
+                style_guide = "Style: Technical, in-depth, explanatory, code-friendly, professional."
             else:
                 style_guide = "Style: Casual, helpful, Instagram-native."
 

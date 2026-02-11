@@ -36,20 +36,19 @@ class DevToDiscovery(DiscoveryStrategy):
             tag_posts = self.client.search_posts(tag, limit=limit)
             candidates.extend(tag_posts)
             
-        # Validate
+        # Validate & Fetch
         valid_candidates = []
         for post in candidates:
+            if limit and len(valid_candidates) >= limit:
+                break
+                
             if self.validate_candidate(post):
-                # Fetch full details (including body and comments) here? 
-                # Optimization: Do it in the agent loop or here. 
-                # Doing it here ensures we pass full context to the agent immediately.
-                # However, usually search returns list view.
-                # Let's fetch full details for the top candidates to ensure quality.
+                # Fetch full details (lazy fetch)
                 full_post = self.client.get_post_details(post.id)
                 if full_post:
                     valid_candidates.append(full_post)
         
-        return valid_candidates[:limit] if limit else valid_candidates
+        return valid_candidates
 
     def validate_candidate(self, post: SocialPost) -> bool:
         """Filters out invalid posts."""

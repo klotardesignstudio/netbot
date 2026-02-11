@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-import psycopg2
+import psycopg
 from urllib.parse import urlparse
 
 # Add project root to path
@@ -27,26 +27,27 @@ def apply_migrations():
         return
 
     try:
-        conn = psycopg2.connect(db_url)
-        conn.autocommit = True
-        cursor = conn.cursor()
-        
-        # Get list of sql files
-        files = sorted([f for f in os.listdir(migrations_dir) if f.endswith(".sql")])
-        
-        for file in files:
-            logger.info(f"Applying {file}...")
-            file_path = os.path.join(migrations_dir, file)
-            with open(file_path, "r") as f:
-                sql = f.read()
+        # Use psycopg v3 (pip install psycopg)
+        # Connect using context manager to ensure close
+        with psycopg.connect(db_url) as conn:
+            # Get list of sql files
+            files = sorted([f for f in os.listdir(migrations_dir) if f.endswith(".sql")])
+            
+            for file in files:
+                logger.info(f"Applying {file}...")
+                file_path = os.path.join(migrations_dir, file)
+                with open(file_path, "r") as f:
+                    sql = f.read()
+                
                 try:
-                    cursor.execute(sql)
+                    # Execute each file in its own transaction
+                    with conn.transaction():
+                         conn.execute(sql)
                     logger.info(f"✅ Applied {file}")
                 except Exception as e:
-                    logger.warning(f"⚠️  Error applying {file} (might already exist): {e}")
+                    # Transaction is rolled back automatically on exception exit from context
+                    logger.warning(f"⚠️  Error applying {file} (might already exist or failed): {e}")
 
-        cursor.close()
-        conn.close()
         logger.info("🎉 All migrations processed.")
 
     except Exception as e:

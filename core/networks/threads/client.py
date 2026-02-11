@@ -99,11 +99,22 @@ class ThreadsClient(SocialNetworkClient):
         """Cleanup."""
         if self.context:
             try:
-                self.session_path.mkdir(exist_ok=True)
+                self.session_path.mkdir(exist_ok=True, parents=True)
             except:
                 pass
+            try:
+                self.context.close()
+            except: pass
+            
         if self.browser:
-            self.browser.close()
+            try:
+                self.browser.close()
+            except: pass
+            
+        self.page = None
+        self.context = None
+        self.browser = None
+        self.playwright = None
 
     def get_post_details(self, post_id: str) -> Optional[SocialPost]:
         """Fetches post details."""
@@ -136,11 +147,13 @@ class ThreadsClient(SocialNetworkClient):
 
     def like_post(self, post: Union[SocialPost, str]) -> bool:
         """Likes a post."""
-        return True
+        logger.warning("Threads like_post not implemented")
+        return False
 
     def post_comment(self, post: Union[SocialPost, str], text: str) -> bool:
         """Replies to a post."""
-        return True
+        logger.warning("Threads post_comment not implemented")
+        return False
     
     def get_user_latest_posts(self, username: str, limit: int = 5) -> List[SocialPost]:
         """Fetches latest posts from a user's threads profile."""
