@@ -200,7 +200,11 @@ class ThreadsClient(SocialNetworkClient):
                 logger.warning(f"[Threads] Post button remained disabled: {e}")
                 return None
 
-            self.page.click(post_btn_sel)
+            try:
+                self.page.click(post_btn_sel, timeout=7000)
+            except Exception as e:
+                logger.warning(f"[Threads] Regular click failed/intercepted, forcing: {e}")
+                self.page.click(post_btn_sel, force=True)
             
             # 4. Success check
             self.page.wait_for_selector(editor_sel, state="hidden", timeout=10000)
@@ -209,6 +213,16 @@ class ThreadsClient(SocialNetworkClient):
 
         except Exception as e:
             logger.error(f"[Threads] Error posting new content: {e}")
+            # Diagnostic
+            try:
+                diag_path = settings.BASE_DIR / "logs" / "debug"
+                diag_path.mkdir(exist_ok=True, parents=True)
+                ts = int(time.time())
+                self.page.screenshot(path=str(diag_path / f"threads_error_{ts}.png"))
+                with open(diag_path / f"threads_error_{ts}.html", "w") as f:
+                    f.write(self.page.content())
+                logger.info(f"[Threads] Diagnostic saved to {diag_path}")
+            except: pass
             return None
     
     def get_user_latest_posts(self, username: str, limit: int = 5) -> List[SocialPost]:

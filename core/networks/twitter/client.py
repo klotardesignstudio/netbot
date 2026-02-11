@@ -311,7 +311,11 @@ class TwitterClient(SocialNetworkClient):
                 # Take a screenshot for debugging if possible (optional)
                 return None
 
-            self.page.click(send_btn_sel)
+            try:
+                self.page.click(send_btn_sel, timeout=7000)
+            except Exception as e:
+                logger.warning(f"[Twitter] Regular click failed/intercepted, forcing: {e}")
+                self.page.click(send_btn_sel, force=True)
             
             # 4. Success check (wait for composer to close)
             # Both inline and modal usually disappear or empty out
@@ -321,6 +325,16 @@ class TwitterClient(SocialNetworkClient):
 
         except Exception as e:
             logger.error(f"[Twitter] Error posting new content: {e}")
+            # Diagnostic
+            try:
+                diag_path = Path("logs/debug")
+                diag_path.mkdir(exist_ok=True, parents=True)
+                ts = int(time.time())
+                self.page.screenshot(path=str(diag_path / f"twitter_error_{ts}.png"))
+                with open(diag_path / f"twitter_error_{ts}.html", "w") as f:
+                    f.write(self.page.content())
+                logger.info(f"[Twitter] Diagnostic saved to {diag_path}")
+            except: pass
             return None
 
     def get_profile_data(self, username: str) -> Optional[SocialProfile]:
