@@ -107,6 +107,18 @@ class AgentOrchestrator:
         """Single execution cycle — runs each platform sequentially."""
         logger.info("--- Starting Cycle ---")
 
+        # 1. Content Curation & Personal Flow
+        try:
+            from scripts.fetch_news import NewsFetcher
+            logger.info("Checking for new news articles...")
+            NewsFetcher().fetch_and_process()
+            
+            from scripts.generate_project_updates import ProjectUpdateGenerator
+            logger.info("Checking for project updates...")
+            ProjectUpdateGenerator().run()
+        except Exception as e:
+            logger.error(f"Error in content flows: {e}")
+
         for cfg in self.platform_configs:
             name = cfg["name"]
 
