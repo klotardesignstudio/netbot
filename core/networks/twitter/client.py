@@ -172,10 +172,15 @@ class TwitterClient(SocialNetworkClient):
 
     def like_post(self, post: Union[SocialPost, str]) -> bool:
         """Likes a tweet."""
-        if not self._start_browser(): return False
+        # Ensure browser is started
+        if not self.page or not self.context:
+            if not self.start():
+                return False
         
+        # Get ID safely for logging
+        post_id = getattr(post, "id", post) if hasattr(post, "id") else str(post)
+
         try:
-            post_id = post.id if isinstance(post, SocialPost) else post
             url = f"https://x.com/i/status/{post_id}"
             if self.page.url != url:
                 self.page.goto(url)
@@ -209,10 +214,15 @@ class TwitterClient(SocialNetworkClient):
 
     def post_comment(self, post: Union[SocialPost, str], text: str) -> bool:
         """Replies to a tweet."""
-        if not self._start_browser(): return False
+        # Ensure browser is started
+        if not self.page or not self.context:
+             if not self.start():
+                 return False
+
+        # Get ID safely for logging
+        post_id = getattr(post, "id", post) if hasattr(post, "id") else str(post)
 
         try:
-            post_id = post.id if isinstance(post, SocialPost) else post
             url = f"https://x.com/i/status/{post_id}"
             if self.page.url != url:
                 self.page.goto(url)

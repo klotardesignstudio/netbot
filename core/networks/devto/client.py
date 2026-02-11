@@ -98,6 +98,12 @@ class DevToClient(SocialNetworkClient):
             try:
                 self.browser.close()
             except: pass
+        
+        # Clear references
+        self.page = None
+        self.context = None
+        self.browser = None
+        self.playwright = None
         self._is_browser_active = False
 
     def get_post_details(self, post_id: str) -> Optional[SocialPost]:
@@ -184,7 +190,8 @@ class DevToClient(SocialNetworkClient):
 
         try:
             logger.info(f"[DevTo] Liking post {post.id} via Browser...")
-            self.page.goto(post.url)
+            # Use explicit timeout
+            self.page.goto(post.url, timeout=self.REQUEST_TIMEOUT * 1000)
             self.page.wait_for_load_state("domcontentloaded")
 
             # Like button is usually #reaction-butt-like
@@ -229,7 +236,8 @@ class DevToClient(SocialNetworkClient):
             # If we are already on the page from like_post, we might save a nav, 
             # but safer to ensure we are on the right URL
             if self.page.url != post.url:
-                self.page.goto(post.url)
+                # Use explicit timeout
+                self.page.goto(post.url, timeout=self.REQUEST_TIMEOUT * 1000)
                 self.page.wait_for_load_state("domcontentloaded")
             
             # 1. Fill Textarea

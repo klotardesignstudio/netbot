@@ -87,8 +87,8 @@ class ThreadsClient(SocialNetworkClient):
                 logger.info("Threads: Already logged in!")
                 self._is_logged_in = True
                 return True
-            except:
-                logger.warning("Threads: Not logged in. Please run scripts/login_threads.py")
+            except Exception as e:
+                logger.warning(f"Threads: Not logged in. Please run scripts/login_threads.py. Error: {e}")
                 return False
                 
         except Exception as e:
@@ -100,16 +100,18 @@ class ThreadsClient(SocialNetworkClient):
         if self.context:
             try:
                 self.session_path.mkdir(exist_ok=True, parents=True)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Error creating session path: {e}")
             try:
                 self.context.close()
-            except: pass
+            except Exception as e:
+                logger.warning(f"Error closing context: {e}")
             
         if self.browser:
             try:
                 self.browser.close()
-            except: pass
+            except Exception as e:
+                logger.warning(f"Error closing browser: {e}")
             
         self.page = None
         self.context = None
@@ -131,15 +133,17 @@ class ThreadsClient(SocialNetworkClient):
             # Threads uses a lot of dynamic classes too
             
             # For now, placeholder
-            return SocialPost(
-                id=post_id,
-                platform=self.platform,
-                author=SocialAuthor(username="unknown", platform=self.platform),
-                content="Placeholder content",
-                url=url,
-                media_urls=[],
-                media_type="text"
-            )
+            # Placeholder: In a real implementation we would parse:
+            # author = ...
+            # content = ...
+            # if not author or not content:
+            #     logger.warning(f"Could not parse post {post_id}")
+            #     return None
+
+            # For now, if we can't really parse, we should probably return None 
+            # instead of a fake post to avoid agent confusion.
+            logger.warning(f"Threads get_post_details parsing not fully implemented for {post_id}")
+            return None
             
         except Exception as e:
             logger.error(f"Error fetching threads post {post_id}: {e}")
@@ -219,7 +223,8 @@ class ThreadsClient(SocialNetworkClient):
                                 url=f"https://www.threads.net{href}",
                                 media_type="text"
                             ))
-                except:
+                except Exception as e:
+                    logger.debug(f"Failed to parse link {href}: {e}")
                     continue
             
             return results
@@ -265,7 +270,9 @@ class ThreadsClient(SocialNetworkClient):
                                 url=f"https://www.threads.net{href}",
                                 media_type="text"
                             ))
-                except: continue
+                except Exception as e:
+                    logger.debug(f"Failed to parse link {href}: {e}")
+                    continue
                 
             return results
         except Exception as e:

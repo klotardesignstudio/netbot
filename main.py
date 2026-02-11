@@ -10,6 +10,7 @@ import random
 import signal
 import sys
 import nest_asyncio
+from datetime import datetime, timezone
 nest_asyncio.apply()
 
 from config.settings import settings
@@ -69,7 +70,15 @@ class AgentOrchestrator:
         logger.info("🤖 NetBot Orchestrator Initialized")
 
         # Verify DB connection
+        # Verify DB connection
         try:
+            # Simple health check query (assuming 'posts' or similar table exists, or just check simple select)
+            # Using raw sql via db interface if available, or just assume connection is alive if init worked
+            # But PR asked for a real check.
+            # db.supabase.table("posts").select("id").limit(1).execute() 
+            # Since db wrapper might not expose table directly nicely here without import, 
+            # let's assume if we can get a count it works.
+            db.get_daily_count(platform="instagram") # Lightweight check
             logger.info("Connected to Supabase.")
         except Exception as e:
             logger.error(f"Failed to connect to DB: {e}. Check .env keys.")
@@ -117,8 +126,6 @@ class AgentOrchestrator:
             if not client.login():
                 logger.error(f"[{name}] Failed to login. Skipping...")
                 client.stop()
-                logger.error(f"[{name}] Failed to login. Skipping...")
-                client.stop()
                 continue
 
             # 3. Discovery
@@ -127,8 +134,6 @@ class AgentOrchestrator:
             candidates = discovery.find_candidates(limit=5)
 
             if not candidates:
-                logger.info(f"[{name}] No candidates found.")
-                client.stop()
                 logger.info(f"[{name}] No candidates found.")
                 client.stop()
                 continue
@@ -142,7 +147,7 @@ class AgentOrchestrator:
                     # --- Audience Awareness (Profile Analysis) ---
                     dossier = None
                     try:
-                        if hasattr(client, 'get_profile_data') and client.get_profile_data:
+                        if hasattr(client, 'get_profile_data') and callable(client.get_profile_data):
                             logger.info(f"[{name}] gathering dossier for @{post.author.username}...")
                             profile_data = client.get_profile_data(post.author.username)
                             if profile_data:
@@ -182,7 +187,10 @@ class AgentOrchestrator:
                                         "post_id": post.id,
                                         "platform": client.platform.value,
                                         "username": post.author.username,
-                                        "created_at": "now"
+                                        "post_id": post.id,
+                                        "platform": client.platform.value,
+                                        "username": post.author.username,
+                                        "created_at": datetime.now(timezone.utc).isoformat()
                                     },
                                     upsert=True
                                 )

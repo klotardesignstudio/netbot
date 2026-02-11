@@ -22,8 +22,8 @@ def setup_threads_login():
     print("=" * 50)
     input("Press Enter to start...")
     
-    session_path = Path("browser_state")
-    session_path.mkdir(exist_ok=True)
+    session_path = Path(__file__).resolve().parent.parent / "browser_state"
+    session_path.mkdir(exist_ok=True, parents=True)
     
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -70,4 +70,6 @@ def setup_threads_login():
     return True
 
 if __name__ == "__main__":
-    setup_threads_login()
+    success = setup_threads_login()
+    if not success:
+        sys.exit(1)
