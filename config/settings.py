@@ -22,15 +22,18 @@ class Settings:
     SUPABASE_KEY = os.getenv("SUPABASE_KEY")
     # Postgres Connection for Agno KnowledgeBase (SQLAlchemy)
     PG_DATABASE_URL = os.getenv("PG_DATABASE_URL")
+    
+    # Dev.to
+    DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
 
-    # Bot Limits
     # Bot Limits
     # Default Limits per platform
     DAILY_LIMITS = {
         "instagram": int(os.getenv("LIMIT_INSTAGRAM", "10")),
         "twitter": int(os.getenv("LIMIT_TWITTER", "30")),
         "threads": int(os.getenv("LIMIT_THREADS", "15")),
-        "linkedin": int(os.getenv("LIMIT_LINKEDIN", "30"))
+        "linkedin": int(os.getenv("LIMIT_LINKEDIN", "30")),
+        "devto": int(os.getenv("LIMIT_DEVTO", "20"))
     }
     # Legacy fallback (max across all if needed, but main.py will use specific)
     daily_interaction_limit = max(DAILY_LIMITS.values())

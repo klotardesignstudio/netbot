@@ -26,6 +26,8 @@ from core.networks.twitter.client import TwitterClient
 from core.networks.twitter.discovery import TwitterDiscovery
 from core.networks.threads.client import ThreadsClient
 from core.networks.threads.discovery import ThreadsDiscovery
+from core.networks.devto.client import DevToClient
+from core.networks.devto.discovery import DevToDiscovery
 
 
 class AgentOrchestrator:
@@ -53,6 +55,12 @@ class AgentOrchestrator:
                 "platform": "threads",
                 "client_class": ThreadsClient,
                 "discovery_class": ThreadsDiscovery,
+            },
+            {
+                "name": "Dev.to",
+                "platform": "devto",
+                "client_class": DevToClient,
+                "discovery_class": DevToDiscovery,
             },
         ]
 
