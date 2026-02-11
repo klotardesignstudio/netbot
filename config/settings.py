@@ -33,7 +33,7 @@ class Settings:
         "twitter": int(os.getenv("LIMIT_TWITTER", "30")),
         "threads": int(os.getenv("LIMIT_THREADS", "15")),
         "linkedin": int(os.getenv("LIMIT_LINKEDIN", "30")),
-        "devto": int(os.getenv("LIMIT_DEVTO", "20"))
+        "devto": int(os.getenv("LIMIT_DEVTO", "5"))
     }
     # Legacy fallback (max across all if needed, but main.py will use specific)
     daily_interaction_limit = max(DAILY_LIMITS.values())
