@@ -382,16 +382,7 @@ class LinkedInClient(SocialNetworkClient):
                     logger.debug(f"Failed to regex URN: {e}")
 
             if not urn:
-                try:
-                    import time
-                    debug_file = f"debug_linkedin_ad_or_error_{int(time.time())}.html"
-                    # Only dump if user requested or debug level is high, but user asked for it.
-                    # Use outerHTML to see the container attributes too
-                    with open(debug_file, "w") as f:
-                        f.write(container.evaluate("el => el.outerHTML"))
-                    logger.debug(f"Dumped failed post to {debug_file}") # debug level to not spam ERROR
-                except Exception as e:
-                    logger.error(f"Failed to dump HTML: {e}")
+                logger.debug("Post skipped — no URN found (likely an ad or promo)")
 
             if not urn or "urn:li:activity" not in urn:
                  # Likely an ad or a promo without a standard activity URN
@@ -453,19 +444,31 @@ class LinkedInClient(SocialNetworkClient):
                     content = text_el.inner_text().strip()
             
             # 4. Metrics
-            metrics = {"likes": 0, "comments": 0}
+            metrics = {"likes": 0, "comments": 0, "reactions": 0}
             
             # Modern Likes: data-view-name="feed-reaction-count"
             likes_node = container.query_selector('[data-view-name="feed-reaction-count"]')
             if likes_node:
-                import re
-                nums = re.findall(r'\d+', likes_node.inner_text().replace(',', '').replace('.', ''))
-                if nums: metrics["likes"] = int(nums[0])
+                import re as _re2
+                nums = _re2.findall(r'\d+', likes_node.inner_text().replace(',', '').replace('.', ''))
+                if nums: 
+                    metrics["likes"] = int(nums[0])
+                    metrics["reactions"] = int(nums[0])
+            else:
+                # Legacy fallback
+                react_el = container.query_selector('.social-details-social-counts__reactions-count')
+                if react_el:
+                    try:
+                        val = int(react_el.inner_text().strip().replace(',', '').replace('.', ''))
+                        metrics["likes"] = val
+                        metrics["reactions"] = val
+                    except: pass
             
             # Modern Comments: data-view-name="feed-comment-count"
             comments_node = container.query_selector('[data-view-name="feed-comment-count"]')
             if comments_node:
-                nums = re.findall(r'\d+', comments_node.inner_text().replace(',', '').replace('.', ''))
+                import re as _re2
+                nums = _re2.findall(r'\d+', comments_node.inner_text().replace(',', '').replace('.', ''))
                 if nums: metrics["comments"] = int(nums[0])
 
             if not content:
@@ -473,14 +476,6 @@ class LinkedInClient(SocialNetworkClient):
                 article_title = container.query_selector('.update-components-article__title')
                 if article_title:
                     content = f"[Article] {article_title.inner_text()}"
-            
-            # 4. Metrics
-            reactions = 0
-            react_el = container.query_selector('.social-details-social-counts__reactions-count')
-            if react_el:
-                 try:
-                     reactions = int(react_el.inner_text().strip().replace(',', '').replace('.', ''))
-                 except: pass
 
             return SocialPost(
                 id=post_id,
@@ -493,8 +488,8 @@ class LinkedInClient(SocialNetworkClient):
                 ),
                 content=content,
                 url=f"https://www.linkedin.com/feed/update/{urn}/",
-                metrics={"reaction_count": reactions},
-                media_type="text" # Mostly text/mixed
+                metrics=metrics,
+                media_type="text"  # Mostly text/mixed
             )
 
         except Exception as e:
@@ -594,10 +589,7 @@ class LinkedInClient(SocialNetworkClient):
             logger.info(f"[DRY RUN] Would comment on {post_id}: {text}")
             return True
         
-        import time as _t
         import platform as _plat
-        ts = int(_t.time())
-        debug_prefix = f"debug_comment_{post_id}_{ts}"
             
         try:
             # Always navigate to the post page for a clean context
@@ -607,10 +599,6 @@ class LinkedInClient(SocialNetworkClient):
             self.page.wait_for_load_state("domcontentloaded")
             self._random_delay(4, 6)
             
-            # --- DIAGNOSTIC: Screenshot after page load ---
-            try:
-                self.page.screenshot(path=f"{debug_prefix}_1_loaded.png", full_page=False)
-            except: pass
             
             # --- Step 1: Scroll down to the social bar / comment area ---
             self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -660,10 +648,6 @@ class LinkedInClient(SocialNetworkClient):
                 logger.info("Step 3: Clicked compact comment input to expand editor")
                 self._random_delay(2, 3)
             
-            # --- DIAGNOSTIC: Screenshot after expanding editor ---
-            try:
-                self.page.screenshot(path=f"{debug_prefix}_2_editor_expanded.png", full_page=False)
-            except: pass
             
             # --- Step 4: Find the comment editor (scoped) ---
             editor_el = self.page.evaluate_handle("""() => {
@@ -698,11 +682,6 @@ class LinkedInClient(SocialNetworkClient):
             
             if not editor_el:
                 logger.error("Step 4: Comment editor NOT found (scoped search)")
-                try:
-                    with open(f"{debug_prefix}_FAIL_no_editor.html", "w") as f:
-                        f.write(self.page.content())
-                    self.page.screenshot(path=f"{debug_prefix}_FAIL_no_editor.png", full_page=False)
-                except: pass
                 return False
             
             # Log what we found
@@ -739,17 +718,7 @@ class LinkedInClient(SocialNetworkClient):
             
             if not typed_text:
                 logger.error("Step 5: TYPING FAILED — editor is empty!")
-                try:
-                    self.page.screenshot(path=f"{debug_prefix}_FAIL_empty_editor.png", full_page=False)
-                    with open(f"{debug_prefix}_FAIL_empty_editor.html", "w") as f:
-                        f.write(self.page.content())
-                except: pass
                 return False
-            
-            # --- DIAGNOSTIC: Screenshot after typing ---
-            try:
-                self.page.screenshot(path=f"{debug_prefix}_3_typed.png", full_page=False)
-            except: pass
             
             # --- Step 6: Find and click Submit button ---
             # Use JavaScript to find the submit button inside comment box with multiple strategies
@@ -832,11 +801,6 @@ class LinkedInClient(SocialNetworkClient):
             
             self._random_delay(5, 8)
             
-            # --- DIAGNOSTIC: Screenshot after submit ---
-            try:
-                self.page.screenshot(path=f"{debug_prefix}_4_submitted.png", full_page=False)
-            except: pass
-            
             # --- Step 7: Verify the comment was actually posted ---
             # CRITICAL: We need to check that the comment appears OUTSIDE the editor
             # First, read current editor text (if still present)
@@ -852,11 +816,6 @@ class LinkedInClient(SocialNetworkClient):
             # If text is still in the editor → submission failed
             if editor_remaining and verify_snippet in editor_remaining:
                 logger.error(f"Step 7: SUBMIT FAILED — text still in editor! Submit method was: {submit_method}")
-                try:
-                    with open(f"{debug_prefix}_FAIL_not_submitted.html", "w") as f:
-                        f.write(self.page.content())
-                    self.page.screenshot(path=f"{debug_prefix}_5_not_submitted.png", full_page=False)
-                except: pass
                 return False
             
             # Check if snippet appears in comments section (not editor)
@@ -886,20 +845,10 @@ class LinkedInClient(SocialNetworkClient):
             
             # NOT verified
             logger.warning(f"⚠️ Comment on {post_id} NOT VERIFIED — submit_method={submit_method}")
-            try:
-                with open(f"{debug_prefix}_FAIL_unverified.html", "w") as f:
-                    f.write(self.page.content())
-                self.page.screenshot(path=f"{debug_prefix}_5_unverified.png", full_page=False)
-            except: pass
             return False
 
         except Exception as e:
             logger.error(f"Error commenting {post_id}: {e}")
-            try:
-                self.page.screenshot(path=f"{debug_prefix}_EXCEPTION.png", full_page=False)
-                with open(f"{debug_prefix}_EXCEPTION.html", "w") as f:
-                    f.write(self.page.content())
-            except: pass
             return False
             
     def get_profile_data(self, username: str) -> Optional[SocialProfile]:

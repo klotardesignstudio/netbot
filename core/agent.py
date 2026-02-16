@@ -193,7 +193,7 @@ class SocialAgent:
             return ActionDecision(
                 should_act=should_act,
                 confidence_score=response.confidence_score,
-                content=response.comment_text,
+                content=response.comment_text.strip('"').strip("'"),
                 reasoning=response.reasoning,
                 action_type="comment",
                 platform=post.platform

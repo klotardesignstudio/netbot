@@ -1,6 +1,7 @@
 """
 LinkedIn Discovery Strategy
 Feed First -> Topic Search Fallback
+Posts sorted by engagement (likes + comments) for maximum visibility.
 """
 import random
 import logging
@@ -13,12 +14,16 @@ from core.interfaces import DiscoveryStrategy
 from core.models import SocialPost, SocialPlatform
 from core.logger import NetBotLoggerAdapter
 
-logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'LinkedIn'})
+logger = NetBotLoggerAdapter(logging.getLogger('netbot'), {'network': 'LinkedIn'})
+
+# Minimum engagement thresholds for LinkedIn posts
+MIN_LIKES = 10       # At least 10 reactions
+MIN_COMMENTS = 2     # At least 2 comments
+
 
 class LinkedInDiscovery(DiscoveryStrategy):
     def __init__(self, client: LinkedInClient):
         self.client = client
-        # Load topics using the hashtags loader (same JSON structure)
         self.topics = settings.load_hashtags("linkedin")
 
     def find_candidates(self, limit: int = 5) -> List[SocialPost]:
@@ -26,6 +31,7 @@ class LinkedInDiscovery(DiscoveryStrategy):
         Feed-first discovery:
         1. Browse home feed for relevant posts
         2. Fallback: search by random topic
+        Posts are sorted by engagement score (likes + comments).
         """
         strategies = [
             ("Feed", self._fetch_from_feed),
@@ -39,7 +45,18 @@ class LinkedInDiscovery(DiscoveryStrategy):
                 valid = [p for p in candidates if self.validate_candidate(p)]
                 
                 if valid:
+                    # Sort by engagement score (descending)
+                    valid = self._sort_by_engagement(valid)
                     logger.info(f"Discovery: Found {len(valid)} valid candidates from {name}.", stage='A')
+                    
+                    # Log top candidates with metrics
+                    for i, p in enumerate(valid[:5]):
+                        m = getattr(p, 'metrics', {}) or {}
+                        logger.info(
+                            f"  #{i+1} [{m.get('likes', 0)} likes, {m.get('comments', 0)} comments] "
+                            f"by @{p.author.username}: {p.content[:50]}..."
+                        )
+                    
                     return valid
                 
                 logger.info(f"{name} yielded no valid candidates.")
@@ -47,6 +64,19 @@ class LinkedInDiscovery(DiscoveryStrategy):
                  logger.error(f"Error in strategy {name}: {e}")
 
         return []
+
+    def _sort_by_engagement(self, posts: List[SocialPost]) -> List[SocialPost]:
+        """Sort posts by engagement score: likes + (comments * 3).
+        Comments are weighted 3x because they indicate deeper engagement
+        and commenting on popular threads gives more visibility.
+        """
+        def engagement_score(post: SocialPost) -> int:
+            m = getattr(post, 'metrics', {}) or {}
+            likes = m.get('likes', 0) or m.get('reactions', 0) or m.get('reaction_count', 0) or 0
+            comments = m.get('comments', 0) or 0
+            return likes + (comments * 3)
+        
+        return sorted(posts, key=engagement_score, reverse=True)
 
     def _fetch_from_feed(self, limit: int) -> List[SocialPost]:
         """Scrape posts from the home feed."""
@@ -70,12 +100,12 @@ class LinkedInDiscovery(DiscoveryStrategy):
         return []
 
     def validate_candidate(self, post: SocialPost) -> bool:
-        """Standard validation: dedup + content check."""
+        """Validates a candidate post: dedup, content check, and engagement threshold."""
         if not post.id:
             return False
 
         # Log discovery
-        metrics = getattr(post, 'metrics', {})
+        metrics = getattr(post, 'metrics', {}) or {}
         try:
             db.log_discovery(post.id, post.platform.value, "discovery", metrics)
         except Exception as e:
@@ -90,23 +120,35 @@ class LinkedInDiscovery(DiscoveryStrategy):
                 )
             except: pass
             return False
-            
-        # Check if already in process via 'discovered_posts' check done inside main loop usually, 
-        # but db.check_if_interacted checks the 'interactions' table.
-        # We might also want to check if we previously rejected it.
-        # (Simplified for now to rely on interaction check)
 
-        # Must have content for the agent to analyze (LinkedIn often has image-only ads)
+        # Must have content for the agent to analyze
         if not post.content or len(post.content) < 10:
             logger.warning(f"Skipping {post.id}: Content too short/empty.", stage='B')
-             # Log skip
             try:
                 db.update_discovery_status(post.id, post.platform.value, "skipped", "Low content")
             except: pass
             return False
             
-        # Check for Promoted/Ads (heuristic in content or specific field)
-        if "Promoted" in post.content: # Basic check
+        # Check for Promoted/Ads
+        if "Promoted" in post.content:
              return False
+
+        # Engagement threshold — skip low-engagement posts
+        likes = metrics.get('likes', 0) or metrics.get('reactions', 0) or 0
+        comments = metrics.get('comments', 0) or 0
+        
+        if likes < MIN_LIKES and comments < MIN_COMMENTS:
+            logger.info(
+                f"Skipping {post.id}: Low engagement ({likes} likes, {comments} comments). "
+                f"Min: {MIN_LIKES} likes or {MIN_COMMENTS} comments.",
+                stage='B'
+            )
+            try:
+                db.update_discovery_status(
+                    post.id, post.platform.value, "skipped",
+                    f"Low engagement: {likes} likes, {comments} comments"
+                )
+            except: pass
+            return False
 
         return True
