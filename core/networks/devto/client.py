@@ -3,7 +3,8 @@ from typing import Optional, List, Dict, Any
 from core.interfaces import SocialNetworkClient
 from core.models import SocialPlatform, SocialPost, SocialAuthor, SocialComment, SocialProfile
 from config.settings import settings
-from core.logger import logger
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Dev.to'})
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright
 from core.browser_manager import BrowserManager
@@ -189,7 +190,7 @@ class DevToClient(SocialNetworkClient):
             return False
 
         try:
-            logger.info(f"[DevTo] Liking post {post.id} via Browser...")
+            logger.info(f"[DevTo] Liking post {post.id} via Browser...", stage='D')
             # Use explicit timeout
             self.page.goto(post.url, timeout=self.REQUEST_TIMEOUT * 1000)
             self.page.wait_for_load_state("domcontentloaded")
@@ -232,7 +233,7 @@ class DevToClient(SocialNetworkClient):
             return False
 
         try:
-            logger.info(f"[DevTo] Commenting on {post.id} via Browser...")
+            logger.info(f"[DevTo] Commenting on {post.id} via Browser...", stage='D')
             # If we are already on the page from like_post, we might save a nav, 
             # but safer to ensure we are on the right URL
             if self.page.url != post.url:
@@ -283,7 +284,7 @@ class DevToClient(SocialNetworkClient):
         }
 
         try:
-            logger.info(f"[DevTo] Posting new article: {title}")
+            logger.info(f"[DevTo] Posting new article: {title}", stage='D')
             response = requests.post(
                 f"{self.BASE_URL}/articles",
                 headers=self.headers,
@@ -293,7 +294,7 @@ class DevToClient(SocialNetworkClient):
             
             if response.status_code in [200, 201]:
                 res_data = response.json()
-                logger.info(f"[DevTo] ✅ Article created: {res_data.get('url')}")
+                logger.info(f"[DevTo] ✅ Article created: {res_data.get('url')}", stage='D')
                 return res_data
             else:
                 logger.error(f"[DevTo] Failed to post article: {response.status_code} - {response.text}")

@@ -13,7 +13,8 @@ from core.networks.instagram.client import InstagramClient
 from core.interfaces import DiscoveryStrategy
 from core.models import SocialPost
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Instagram'})
 
 
 class InstagramDiscovery(DiscoveryStrategy):
@@ -60,7 +61,7 @@ class InstagramDiscovery(DiscoveryStrategy):
         attempts = min(3, len(self.vip_list))
         tried = random.sample(self.vip_list, attempts)
         for target_user in tried:
-            logger.info(f"Discovery: Checking VIP @{target_user}")
+            logger.info(f"Discovery: Checking VIP @{target_user}", stage='A')
             posts = self.client.get_user_latest_posts(target_user, limit=amount)
             if posts:
                 return posts
@@ -73,7 +74,7 @@ class InstagramDiscovery(DiscoveryStrategy):
         attempts = min(3, len(self.hashtags))
         tried = random.sample(self.hashtags, attempts)
         for target_tag in tried:
-            logger.info(f"Discovery: Checking Hashtag #{target_tag}")
+            logger.info(f"Discovery: Checking Hashtag #{target_tag}", stage='A')
             posts = self.client.search_posts(target_tag, limit=amount)
             if posts:
                 random.shuffle(posts)
@@ -88,7 +89,7 @@ class InstagramDiscovery(DiscoveryStrategy):
         # Check DB first (TODO: Update DB to support platform check)
         # For now, we assume global ID uniqueness or collision risk is low enough for MVP refactor
         if db.check_if_interacted(post.id, post.platform.value):
-            logger.debug(f"Skipping {post.id}: Already interacted.")
+            logger.warning(f"Skipping {post.id}: Already interacted.", stage='B')
             return False
 
         # Ignore if it's our own post
@@ -97,7 +98,7 @@ class InstagramDiscovery(DiscoveryStrategy):
         
         # Ignore if no caption AND no image (agent can't do much)
         if not post.content and not post.media_urls:
-            logger.debug(f"Skipping {post.id}: No caption/image context.")
+            logger.warning(f"Skipping {post.id}: No caption/image context.", stage='B')
             return False
             
         return True

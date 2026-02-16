@@ -10,7 +10,8 @@ from core.networks.threads.client import ThreadsClient
 from core.interfaces import DiscoveryStrategy
 from core.models import SocialPost
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Threads'})
 
 class ThreadsDiscovery(DiscoveryStrategy):
     def __init__(self, client: ThreadsClient):
@@ -50,7 +51,7 @@ class ThreadsDiscovery(DiscoveryStrategy):
         attempts = min(3, len(self.vip_list))
         tried = random.sample(self.vip_list, attempts)
         for target_user in tried:
-            logger.info(f"Threads Discovery: Checking VIP @{target_user}")
+            logger.info(f"Threads Discovery: Checking VIP @{target_user}", stage='A')
             posts = self.client.get_user_latest_posts(target_user, limit=amount)
             if posts:
                 return posts
@@ -62,7 +63,7 @@ class ThreadsDiscovery(DiscoveryStrategy):
         attempts = min(3, len(self.hashtags))
         tried = random.sample(self.hashtags, attempts)
         for target_tag in tried:
-            logger.info(f"Threads Discovery: Checking Hashtag #{target_tag}")
+            logger.info(f"Threads Discovery: Checking Hashtag #{target_tag}", stage='A')
             posts = self.client.search_posts(target_tag, limit=amount)
             if posts:
                 random.shuffle(posts)
@@ -72,6 +73,6 @@ class ThreadsDiscovery(DiscoveryStrategy):
     def validate_candidate(self, post: SocialPost) -> bool:
         if not post.id: return False
         if db.check_if_interacted(post.id, post.platform.value):
-            logger.debug(f"Skipping {post.id}: Already interacted.")
+            logger.warning(f"Skipping {post.id}: Already interacted.", stage='B')
             return False
         return True

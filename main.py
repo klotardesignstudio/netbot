@@ -16,7 +16,10 @@ nest_asyncio.apply()
 from config.settings import settings
 from core.database import db
 from core.agent import SocialAgent
-from core.logger import logger
+from core.logger import NetBotLoggerAdapter
+# Base logger for main module
+import logging
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'status_code': 'SYSTEM'})
 from core.browser_manager import BrowserManager
 
 # Networks
@@ -69,7 +72,7 @@ class AgentOrchestrator:
 
     def start(self):
         """Main execution loop."""
-        logger.info("🤖 NetBot Orchestrator Initialized")
+        logger.info("🤖 NetBot Orchestrator Initialized", status_code="SYSTEM")
 
         # Verify DB connection
         # Verify DB connection
@@ -102,12 +105,12 @@ class AgentOrchestrator:
             except KeyboardInterrupt:
                 self.stop()
             except Exception as e:
-                logger.exception(f"Error in main loop: {e}")
+                logger.exception(f"Error in main loop: {e}", status_code="ERROR")
                 time.sleep(60)
 
     def run_cycle(self):
         """Single execution cycle — runs each platform sequentially."""
-        logger.info("--- Starting Cycle ---")
+        logger.info("--- Starting Cycle ---", status_code="SYSTEM")
 
         # 1. Content Curation & Personal Flow
         try:
@@ -135,7 +138,7 @@ class AgentOrchestrator:
             # Publications Availability Check
             can_publish = self.editor.can_publish(platform_value)
             
-            logger.info(f"[{name}] Activity: Interactions({current_interactions}/{interact_limit}) | Publishing({can_publish})")
+            logger.info(f"[{name}] Activity: Interactions({current_interactions}/{interact_limit}) | Publishing({can_publish})", status_code="FINANCE")
 
             if not can_interact and not can_publish:
                 logger.info(f"[{name}] Limits reached for both interaction and publishing. Skipping...")
@@ -193,7 +196,7 @@ class AgentOrchestrator:
                     decision = self.agent.decide_and_comment(post, dossier=dossier)
 
                     if decision.should_act:
-                        logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}")
+                        logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}", stage='C')
                         
                         if settings.dry_run:
                              logger.info(f"[{name}] DRY RUN: Would have liked and commented.")
@@ -253,7 +256,8 @@ class AgentOrchestrator:
                             db.update_discovery_status(post.id, client.platform.value, "error", str(e))
 
                     else:
-                        logger.info(f"[{name}] Rejected. Reason: {decision.reasoning}")
+                        logger.info(f"[{name}] Rejected.", stage='C')
+                        logger.info(f"Reason: {decision.reasoning}", stage='C')
                         db.update_discovery_status(post.id, client.platform.value, "rejected", decision.reasoning)
 
                 except Exception as e:

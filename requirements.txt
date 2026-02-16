@@ -17,3 +17,4 @@ feedparser>=6.0.10
 nest_asyncio>=1.6.0
 requests>=2.31.0
 tweepy>=4.15.0
+colorama>=0.4.6

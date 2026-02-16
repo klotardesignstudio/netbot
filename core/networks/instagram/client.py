@@ -24,7 +24,8 @@ from core.browser_manager import BrowserManager
 
 from config.settings import settings
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Instagram'})
 
 
 class InstagramClient(SocialNetworkClient):
@@ -209,7 +210,7 @@ class InstagramClient(SocialNetworkClient):
                     self.page.wait_for_selector(selector, timeout=5000)
                     post_links = self.page.query_selector_all(selector)
                     if post_links:
-                        logger.info(f"Found {len(post_links)} posts with selector: {selector}")
+                        logger.info(f"Found {len(post_links)} posts with selector: {selector}", stage='A')
                         break
                 except:
                     continue
@@ -253,7 +254,7 @@ class InstagramClient(SocialNetworkClient):
             return []
         
         try:
-            logger.info(f"Fetching posts from #{hashtag}...")
+            logger.info(f"Fetching posts from #{hashtag}...", stage='A')
             self.page.goto(f'https://www.instagram.com/explore/tags/{hashtag}/', timeout=30000)
             self._random_delay(3, 5)
             
@@ -666,7 +667,7 @@ class InstagramClient(SocialNetworkClient):
             if like_btn:
                 # Click parent usually to be safe, or the svg itself
                 like_btn.click()
-                logger.info(f"Liked post {media_id}")
+                logger.info(f"Liked post {media_id}", stage='D')
                 self._random_delay(1, 2)
                 return True
             else:
@@ -768,7 +769,7 @@ class InstagramClient(SocialNetworkClient):
             self._random_delay(3, 5)
             
             # Verify if comment appeared (optional, tricky to do reliably without waiting too long)
-            logger.info(f"Comment posted on {media_id}")
+            logger.info(f"Comment posted on {media_id}", stage='D')
             return True
             
         except Exception as e:

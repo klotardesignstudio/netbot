@@ -14,7 +14,8 @@ from core.browser_manager import BrowserManager
 
 from config.settings import settings
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Threads'})
 
 class ThreadsClient(SocialNetworkClient):
     """
@@ -232,7 +233,7 @@ class ThreadsClient(SocialNetworkClient):
                     }}""",
                     timeout=10000
                 )
-                logger.info("[Threads] ✅ New thread posted.")
+                logger.info("[Threads] ✅ New thread posted.", stage='D')
                 return "success"
             except Exception as e:
                 logger.warning(f"[Threads] Success verification timed out, but post might be live: {e}")
@@ -258,7 +259,7 @@ class ThreadsClient(SocialNetworkClient):
         
         try:
             url = f"https://www.threads.net/@{username}"
-            logger.info(f"Visiting Threads profile: {url}")
+            logger.info(f"Visiting Threads profile: {url}", stage='A')
             self.page.goto(url, timeout=30000)
             self._random_delay(2, 4)
             
@@ -332,7 +333,7 @@ class ThreadsClient(SocialNetworkClient):
         
         try:
             url = f"https://www.threads.net/search?q={query}"
-            logger.info(f"Searching Threads: {url}")
+            logger.info(f"Searching Threads: {url}", stage='A')
             self.page.goto(url, timeout=30000)
             self._random_delay(2, 4)
             

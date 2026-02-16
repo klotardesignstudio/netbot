@@ -15,7 +15,8 @@ from core.browser_manager import BrowserManager
 import tweepy
 from config.settings import settings
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Twitter'})
 
 class TwitterClient(SocialNetworkClient):
     """
@@ -227,7 +228,7 @@ class TwitterClient(SocialNetworkClient):
                 response = self.api_client.like(tweet_id=post_id)
                 # response.data['liked'] should be True
                 if response.data and response.data.get('liked'):
-                    logger.info(f"Liked tweet {post_id}")
+                    logger.info(f"Liked tweet {post_id}", stage='D')
                     return True
                 else:
                     logger.warning(f"API like response unexpected: {response}")
@@ -260,7 +261,7 @@ class TwitterClient(SocialNetworkClient):
                 self.page.click(like_btn_sel)
                 try:
                     self.page.wait_for_selector(unlike_btn_sel, timeout=5000)
-                    logger.info(f"Liked tweet {post_id} (Browser)")
+                    logger.info(f"Liked tweet {post_id} (Browser)", stage='D')
                     return True
                 except:
                     return False
@@ -281,7 +282,7 @@ class TwitterClient(SocialNetworkClient):
                 logger.info(f"[Twitter API] Replying to {post_id}: {text}")
                 response = self.api_client.create_tweet(text=text, in_reply_to_tweet_id=post_id)
                 if response.data and response.data.get('id'):
-                    logger.info(f"Replied to {post_id} (API ID: {response.data['id']})")
+                    logger.info(f"Replied to {post_id} (API ID: {response.data['id']})", stage='D')
                     return True
                 else:
                     logger.warning(f"API reply response unexpected: {response}")
@@ -319,7 +320,7 @@ class TwitterClient(SocialNetworkClient):
                 
             self.page.click(send_btn_sel)
             self.page.wait_for_selector(send_btn_sel, state="hidden", timeout=10000)
-            logger.info(f"Replied to {post_id} (Browser)")
+            logger.info(f"Replied to {post_id} (Browser)", stage='D')
             return True
 
         except Exception as e:
@@ -333,7 +334,7 @@ class TwitterClient(SocialNetworkClient):
                 logger.info(f"[Twitter API] Posting tweet: {text}")
                 response = self.api_client.create_tweet(text=text)
                 if response.data and response.data.get('id'):
-                    logger.info(f"Posted tweet (API ID: {response.data['id']})")
+                    logger.info(f"Posted tweet (API ID: {response.data['id']})", stage='D')
                     return "success"
                 else:
                     logger.warning(f"API post response unexpected: {response}")
@@ -474,7 +475,7 @@ class TwitterClient(SocialNetworkClient):
                         content = text_div.inner_text() if text_div else ""
                         metrics = self._parse_tweet_metrics(tweet)
                         
-                        logger.info(f"   Found tweet {post_id}: {content[:30]}... (R:{metrics['reply_count']} L:{metrics['like_count']})")
+                        logger.info(f"   Found tweet {post_id}: {content[:30]}... (R:{metrics['reply_count']} L:{metrics['like_count']})", stage='A')
                         
                         results.append(SocialPost(
                             id=post_id,
