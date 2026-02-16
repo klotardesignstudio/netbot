@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from config.settings import settings
-from core.logger import logger
+from core.logger import logger, NetBotLoggerAdapter
 from core.models import SocialPost, ActionDecision, SocialPlatform
 from core.knowledge_base import NetBotKnowledgeBase
 from core.profile_analyzer import ProfileDossier
@@ -24,6 +24,7 @@ class SocialAgent:
         self.prompts = settings.load_prompts()
         self.knowledge_base = NetBotKnowledgeBase()
         self.agent = self._create_agent()
+        self.logger = NetBotLoggerAdapter(logger, {'stage': 'C', 'status_code': 'BRAIN'})
 
     def _create_agent(self) -> Agent:
         """Configures the Agno Agent with GPT-4o-mini."""
@@ -33,9 +34,9 @@ class SocialAgent:
         try:
             with open(persona_path, "r", encoding="utf-8") as f:
                 persona_content = f.read()
-            logger.debug(f"✅ Persona loaded from {persona_path} ({len(persona_content)} chars)")
+            self.logger.debug(f"✅ Persona loaded from {persona_path} ({len(persona_content)} chars)")
         except Exception as e:
-            logger.error(f"❌ Failed to load persona from {persona_path}: {e}")
+            self.logger.error(f"❌ Failed to load persona from {persona_path}: {e}")
             persona_content = "You are a helpful social media assistant."
 
         system_prompt = f"""
@@ -152,7 +153,7 @@ class SocialAgent:
             - {style_guide}
             """
             
-            logger.info(f"Agent analyzing post {post.id} by {post.author.username} on {post.platform.value}...")
+            self.logger.info(f"Agent analyzing post {post.id} by {post.author.username} on {post.platform.value}...")
             
             # Try to pass image URL directly in the prompt if available
             image_url_log = "None"
@@ -162,7 +163,7 @@ class SocialAgent:
                 image_url_log = post.media_urls[0]
             
             # --- LOGGING WHAT THE AI SEES ---
-            logger.info(f"👀 AI INPUT DATA via {post.id}:\n   -> Content: {post.content[:200]}...\n   -> Image: {image_url_log}")
+            self.logger.info(f"👀 AI INPUT DATA via {post.id}:\n   -> Content: {post.content[:200]}...\n   -> Image: {image_url_log}")
 
             # Run agent
             response_obj = self.agent.run(user_input)
@@ -170,14 +171,14 @@ class SocialAgent:
             
             # Log Token Usage if available
             if hasattr(response_obj, 'metrics') and response_obj.metrics:
-                logger.info(f"💰 Token Usage: {response_obj.metrics}")
+                self.logger.info(f"💰 Token Usage: {response_obj.metrics}")
             
-            logger.info(f"Agent Decision: Comment={response.should_comment} (Conf: {response.confidence_score}%) | Reasoning: {response.reasoning}")
+            self.logger.info(f"Agent Decision: Comment={response.should_comment} (Conf: {response.confidence_score}%) | Reasoning: {response.reasoning}")
             
             # 6. Apply Confidence Filter
             should_act = response.should_comment
             if should_act and response.confidence_score < 70:
-                logger.warning(f"⚠️ Confidence too low ({response.confidence_score}%). Skipping action.")
+                self.logger.warning(f"⚠️ Confidence too low ({response.confidence_score}%). Skipping action.")
                 should_act = False
                 response.reasoning = f"[Low Confidence {response.confidence_score}%] {response.reasoning}"
 
@@ -191,7 +192,7 @@ class SocialAgent:
             )
 
         except Exception as e:
-            logger.error(f"Agent Malfunction: {e}")
+            self.logger.error(f"Agent Malfunction: {e}")
             return ActionDecision(should_act=False, reasoning=f"Error: {e}")
 
 # agent = SocialAgent() # Instantiation moved to main.py to avoid side effects on import

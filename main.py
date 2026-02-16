@@ -19,7 +19,7 @@ from core.agent import SocialAgent
 from core.logger import NetBotLoggerAdapter
 # Base logger for main module
 import logging
-logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'status_code': 'SYSTEM'})
+logger = NetBotLoggerAdapter(logging.getLogger("netbot"), {'status_code': 'SYSTEM'})
 from core.browser_manager import BrowserManager
 
 # Networks
