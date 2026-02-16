@@ -171,7 +171,7 @@ class SocialAgent:
             
             # Log Token Usage if available
             if hasattr(response_obj, 'metrics') and response_obj.metrics:
-                self.logger.info(f"💰 Token Usage: {response_obj.metrics}")
+                self.logger.info(f"💰 Token Usage: {response_obj.metrics}", status_code='FINANCE')
             
             self.logger.info(f"Agent Decision: Comment={response.should_comment} (Conf: {response.confidence_score}%) | Reasoning: {response.reasoning}")
             

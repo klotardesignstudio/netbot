@@ -196,7 +196,7 @@ class AgentOrchestrator:
                     decision = self.agent.decide_and_comment(post, dossier=dossier)
 
                     if decision.should_act:
-                        logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}", stage='C')
+                        logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}", stage='C', status_code='BRAIN')
                         
                         if settings.dry_run:
                              logger.info(f"[{name}] DRY RUN: Would have liked and commented.")
@@ -256,8 +256,8 @@ class AgentOrchestrator:
                             db.update_discovery_status(post.id, client.platform.value, "error", str(e))
 
                     else:
-                        logger.info(f"[{name}] Rejected.", stage='C')
-                        logger.info(f"Reason: {decision.reasoning}", stage='C')
+                        logger.info(f"[{name}] Rejected.", stage='C', status_code='BRAIN')
+                        logger.info(f"Reason: {decision.reasoning}", stage='C', status_code='BRAIN')
                         db.update_discovery_status(post.id, client.platform.value, "rejected", decision.reasoning)
 
                 except Exception as e:

@@ -48,7 +48,22 @@ def test_error_handling():
     except Exception as e:
         err_logger.error(f"Falha crítica no login: {e}")
 
+def test_adapter_override():
+    print("\n--- Testing Adapter Override ---")
+    # Simulate main.py logger which has default status='SYSTEM'
+    main_logger = NetBotLoggerAdapter(logger, {'status_code': 'SYSTEM'})
+    
+    # Default behavior
+    main_logger.info("Default System Message")
+    
+    # Override behavior (e.g. Brain decision)
+    main_logger.info("Brain Decision Override", stage='C', status_code='BRAIN')
+    
+    # Override behavior (e.g. Finance)
+    main_logger.info("Finance Override", status_code='FINANCE')
+
 if __name__ == "__main__":
     test_system_logs()
     test_twitter_flow()
     test_error_handling()
+    test_adapter_override()
