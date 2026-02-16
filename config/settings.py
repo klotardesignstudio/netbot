@@ -43,7 +43,7 @@ class Settings:
         "twitter": int(os.getenv("LIMIT_TWITTER", "30")),
         "threads": int(os.getenv("LIMIT_THREADS", "15")),
         "linkedin": int(os.getenv("LIMIT_LINKEDIN", "30")),
-        "devto": int(os.getenv("LIMIT_DEVTO", "5"))
+        "devto": int(os.getenv("LIMIT_DEVTO", "10"))
     }
     
     # Step 3: Publishing Limits & Schedule
