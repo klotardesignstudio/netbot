@@ -1,4 +1,5 @@
 import requests
+import logging
 from typing import Optional, List, Dict, Any
 from core.interfaces import SocialNetworkClient
 from core.models import SocialPlatform, SocialPost, SocialAuthor, SocialComment, SocialProfile
