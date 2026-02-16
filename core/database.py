@@ -77,5 +77,41 @@ class Database:
             # If logging fails, just print to console to avoid infinite loops
             logger.critical(f"Failed to send log to Supabase: {e}")
 
+    def log_discovery(self, post_id: str, platform: str, source: str, metrics: dict) -> str:
+        """
+        Logs a discovered post.
+        Returns the ID if successful, or None if it already exists/fails.
+        """
+        try:
+            data = {
+                "external_id": post_id,
+                "platform": platform,
+                "hashtag_source": source,
+                "metrics": metrics,
+                "status": "seen",
+                "created_at": datetime.now().isoformat()
+            }
+            # Use upsert to handle potential race conditions or re-discovery
+            # on_conflict="external_id, platform" is implied by the unique constraint
+            res = self.client.table("discovered_posts").upsert(data, on_conflict="external_id, platform").execute()
+            
+            if res.data:
+                return res.data[0]["id"]
+            return None
+        except Exception as e:
+            logger.error(f"Error logging discovery for {platform}/{post_id}: {e}")
+            return None
+
+    def update_discovery_status(self, external_id: str, platform: str, status: str, reasoning: str = None):
+        """Updates the status and reasoning of a discovered post by external_id and platform."""
+        try:
+            data = {"status": status, "updated_at": datetime.now().isoformat()}
+            if reasoning:
+                data["ai_reasoning"] = reasoning
+            
+            self.client.table("discovered_posts").update(data).eq("external_id", external_id).eq("platform", platform).execute()
+        except Exception as e:
+            logger.error(f"Error updating discovery status {external_id}: {e}")
+
 
 db = Database()

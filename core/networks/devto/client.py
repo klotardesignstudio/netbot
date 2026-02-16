@@ -348,6 +348,12 @@ class DevToClient(SocialNetworkClient):
                 profile_url=f"https://dev.to/{data['user']['username']}"
             )
             
+            metrics = {
+                "like_count": data.get("public_reactions_count", 0),
+                "comment_count": data.get("comments_count", 0),
+                "view_count": 0 # Not exposed in public list API usually
+            }
+            
             post = SocialPost(
                 id=str(data["id"]),
                 platform=SocialPlatform.DEVTO,
@@ -357,9 +363,10 @@ class DevToClient(SocialNetworkClient):
                 created_at=None,
                 media_urls=[data["cover_image"]] if data.get("cover_image") else [],
                 media_type="image" if data.get("cover_image") else "text",
-                like_count=data["public_reactions_count"],
-                comment_count=data["comments_count"],
-                raw_data=data
+                like_count=metrics["like_count"],
+                comment_count=metrics["comment_count"],
+                raw_data=data,
+                metrics=metrics
             )
             posts.append(post)
         return posts

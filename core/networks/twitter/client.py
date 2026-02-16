@@ -60,28 +60,58 @@ class TwitterClient(SocialNetworkClient):
         try:
             self.playwright = BrowserManager.get_playwright()
             
-            self.browser = self.playwright.chromium.launch(
-                headless=settings.DEBUG_HEADLESS,
-                args=['--disable-blink-features=AutomationControlled']
-            )
+            self.playwright = BrowserManager.get_playwright()
             
-            state_file = self.session_path / "state_twitter.json"
-            if state_file.exists():
-                logger.debug("Loading existing Twitter session...")
-                self.context = self.browser.new_context(
-                    storage_state=str(state_file),
+            user_data_dir = self.session_path / "twitter_context"
+            
+            # Use Persistent Context if available (Preferred)
+            if user_data_dir.exists():
+                logger.debug(f"Launching Twitter with Persistent Context: {user_data_dir}")
+                self.context = self.playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(user_data_dir),
+                    headless=settings.DEBUG_HEADLESS,
                     viewport={'width': 1280, 'height': 800},
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                     locale='en-US',
-                    timezone_id='America/Sao_Paulo'
+                    timezone_id='America/Sao_Paulo',
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars',
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-extensions',
+                        '--disable-remote-fonts',
+                        '--window-size=1280,800',
+                    ]
                 )
-            else:
-                logger.warning("No Twitter session found!")
-                self.context = self.browser.new_context(
-                    viewport={'width': 1280, 'height': 800}
-                )
+                self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+                self.browser = None # Persistent context manages its own browser process
             
-            self.page = self.context.new_page()
+            else:
+                # Fallback (Legacy/Clean Entry)
+                logger.warning("No persistent context found. Launching fresh browser.")
+                self.browser = self.playwright.chromium.launch(
+                    headless=settings.DEBUG_HEADLESS,
+                    args=['--disable-blink-features=AutomationControlled']
+                )
+                
+                state_file = self.session_path / "state_twitter.json"
+                if state_file.exists():
+                    logger.debug("Loading existing Twitter session JSON...")
+                    self.context = self.browser.new_context(
+                        storage_state=str(state_file),
+                        viewport={'width': 1280, 'height': 800},
+                        user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                        locale='en-US',
+                        timezone_id='America/Sao_Paulo'
+                    )
+                else:
+                    self.context = self.browser.new_context(
+                        viewport={'width': 1280, 'height': 800},
+                        user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+                    )
+                self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+
             return True
             
         except Exception as e:
@@ -378,6 +408,42 @@ class TwitterClient(SocialNetworkClient):
         # For now, we don't have a reliable way to scrape bio without risking detection on X.
         return None
 
+    def _parse_tweet_metrics(self, tweet_element) -> Dict[str, Any]:
+        """Helper to extract metrics from a tweet element."""
+        metrics = {"reply_count": 0, "retweet_count": 0, "like_count": 0, "view_count": 0}
+        
+        try:
+            # Helper to parse number from aria-label or text
+            def parse_metric(testid: str) -> int:
+                el = tweet_element.query_selector(f'div[data-testid="{testid}"]')
+                if not el: return 0
+                aria = el.get_attribute("aria-label") # e.g. "123 replies"
+                if aria:
+                    try:
+                        return int(aria.split()[0].replace(',', ''))
+                    except: pass
+                # Fallback to text content
+                text = el.inner_text()
+                if text:
+                    # Handle K/M suffixes
+                    mul = 1
+                    if 'K' in text: mul = 1000; text = text.replace('K','')
+                    elif 'M' in text: mul = 1000000; text = text.replace('M','')
+                    try:
+                        return int(float(text.replace(',', '')) * mul)
+                    except: pass
+                return 0
+
+            metrics["reply_count"] = parse_metric("reply")
+            metrics["retweet_count"] = parse_metric("retweet")
+            metrics["like_count"] = parse_metric("like")
+            # Views often don't have a distinct data-testid container that is consistent, skipping for now or try "app-text-transition-container" inside a view group
+            
+        except Exception as e:
+            logger.warning(f"Error parsing metrics: {e}")
+        
+        return metrics
+
     def get_user_latest_posts(self, username: str, limit: int = 5) -> List[SocialPost]:
         """Fetches latest posts from a user's profile."""
         if not self._is_logged_in: return []
@@ -406,8 +472,9 @@ class TwitterClient(SocialNetworkClient):
                     if post_id:
                         text_div = tweet.query_selector('div[data-testid="tweetText"]')
                         content = text_div.inner_text() if text_div else ""
+                        metrics = self._parse_tweet_metrics(tweet)
                         
-                        logger.info(f"   Found tweet {post_id}: {content[:30]}...")
+                        logger.info(f"   Found tweet {post_id}: {content[:30]}... (R:{metrics['reply_count']} L:{metrics['like_count']})")
                         
                         results.append(SocialPost(
                             id=post_id,
@@ -415,7 +482,8 @@ class TwitterClient(SocialNetworkClient):
                             author=SocialAuthor(username=username, platform=self.platform),
                             content=content,
                             url=f"https://x.com{href}" if href.startswith('/') else href,
-                            media_type="text" 
+                            media_type="text",
+                            metrics=metrics
                         ))
             
             return results
@@ -441,12 +509,19 @@ class TwitterClient(SocialNetworkClient):
                  if link:
                     href = link.get_attribute('href')
                     parts = href.split('/')
+                    # href usually looks like /username/status/123456
+                    # parts: ['', 'username', 'status', '123456', ...]
                     if len(parts) >= 4 and parts[2] == 'status':
                         username = parts[1]
                         post_id = parts[3]
                         
                         text_div = tweet.query_selector('div[data-testid="tweetText"]')
                         content = text_div.inner_text() if text_div else ""
+                        metrics = self._parse_tweet_metrics(tweet)
+
+                        # Skip ads/promoted
+                        if tweet.query_selector('span:has-text("Ad")') or tweet.query_selector('span:has-text("Promoted")'):
+                            continue
                         
                         results.append(SocialPost(
                             id=post_id,
@@ -454,7 +529,8 @@ class TwitterClient(SocialNetworkClient):
                             author=SocialAuthor(username=username, platform=self.platform),
                             content=content,
                             url=f"https://x.com{href}",
-                            media_type="text"
+                            media_type="text",
+                            metrics=metrics
                         ))
             return results
         except Exception as e:

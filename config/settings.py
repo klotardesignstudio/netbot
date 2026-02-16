@@ -69,7 +69,11 @@ class Settings:
     daily_interaction_limit = max(DAILY_LIMITS.values())
     min_sleep_interval = int(os.getenv("MIN_SLEEP_INTERVAL", "600")) # 10 minutes
     max_sleep_interval = int(os.getenv("MAX_SLEEP_INTERVAL", "3000")) # 50 minutes
+    daily_interaction_limit = max(DAILY_LIMITS.values())
+    min_sleep_interval = int(os.getenv("MIN_SLEEP_INTERVAL", "600")) # 10 minutes
+    max_sleep_interval = int(os.getenv("MAX_SLEEP_INTERVAL", "3000")) # 50 minutes
     dry_run = os.getenv("DRY_RUN", "True").lower() == "true"
+    discovery_limit = int(os.getenv("DISCOVERY_LIMIT", "20")) # Number of posts to analyze per cycle
     
     # Proxy (optional, helps avoid IP bans)
     PROXY_URL = os.getenv("PROXY_URL", None)
@@ -100,17 +104,20 @@ class Settings:
     @classmethod
     def load_vip_list(cls, platform: str = None):
         """Loads VIP list. Tries platform specific first (e.g. vip_list_instagram.json), then falls back to default."""
-        if platform:
-            specific_path = cls.CONFIG_DIR / f"vip_list_{platform}.json"
-            if specific_path.exists():
-                with open(specific_path, "r") as f:
-                    return json.load(f)
-        
-        # Fallback
-        if cls.VIP_LIST_PATH.exists():
-            with open(cls.VIP_LIST_PATH, "r") as f:
-                return json.load(f)
+        # --- VIP LIST DISABLED BY USER REQUEST (Hashtags Only) ---
         return []
+
+        # if platform:
+        #     specific_path = cls.CONFIG_DIR / f"vip_list_{platform}.json"
+        #     if specific_path.exists():
+        #         with open(specific_path, "r") as f:
+        #             return json.load(f)
+        
+        # # Fallback
+        # if cls.VIP_LIST_PATH.exists():
+        #     with open(cls.VIP_LIST_PATH, "r") as f:
+        #         return json.load(f)
+        # return []
 
     @classmethod
     def load_hashtags(cls, platform: str = None):

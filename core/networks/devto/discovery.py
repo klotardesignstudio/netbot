@@ -55,9 +55,27 @@ class DevToDiscovery(DiscoveryStrategy):
         if not post.id:
             return False
             
-        # Check DB for previous interaction
+        # 1. Stage A: Collector - Log everything as 'seen'
+        metrics = getattr(post, 'metrics', {})
+        db.log_discovery(post.id, post.platform.value, "discovery", metrics)
+        
+        # 2. Stage B: Marketing Filter (Contextual)
+        # For Dev.to, we prioritize posts with active discussions
+        comment_count = metrics.get("comment_count", 0)
+        
+        # Rule: Must have at least 1 comment to be worth joining? 
+        # Or maybe recent? For now, let's say > 0 comments means active.
+        if comment_count == 0:
+            logger.debug(f"[DevTo] Skipping {post.id}: No comments yet.")
+            db.update_discovery_status(post.id, post.platform.value, "skipped", "No comments yet")
+            return False
+        
+        # 3. Check Deduplication
         if db.check_if_interacted(post.id, SocialPlatform.DEVTO.value):
             logger.debug(f"[DevTo] Skipping {post.id}: Already interacted.")
+            # We don't need to log skipped status here if we rely on interactions table, 
+            # but for completeness in discovery log:
+            db.update_discovery_status(post.id, post.platform.value, "skipped", "Already interacted")
             return False
 
         # Ignore if it's our own post (if we had a username check)

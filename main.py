@@ -47,12 +47,12 @@ class AgentOrchestrator:
                 "client_class": InstagramClient,
                 "discovery_class": InstagramDiscovery,
             },
-            {
-                "name": "Twitter",
-                "platform": "twitter",
-                "client_class": TwitterClient,
-                "discovery_class": TwitterDiscovery,
-            },
+            # {
+            #     "name": "Twitter",
+            #     "platform": "twitter",
+            #     "client_class": TwitterClient,
+            #     "discovery_class": TwitterDiscovery,
+            # },
             # {
             #     "name": "Threads",
             #     "platform": "threads",
@@ -164,7 +164,8 @@ class AgentOrchestrator:
 
             discovery = cfg["discovery_class"](client)
             logger.debug(f"[{name}] Discovery started...")
-            candidates = discovery.find_candidates(limit=5)
+            limit = settings.discovery_limit
+            candidates = discovery.find_candidates(limit=limit)
 
             if not candidates:
                 logger.info(f"[{name}] No candidates found.")
@@ -192,52 +193,72 @@ class AgentOrchestrator:
                     decision = self.agent.decide_and_comment(post, dossier=dossier)
 
                     if decision.should_act:
-                        logger.info(f"[{name}] Decided to ACT: {decision.content}")
+                        logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}")
+                        
+                        if settings.dry_run:
+                             logger.info(f"[{name}] DRY RUN: Would have liked and commented.")
+                             db.update_discovery_status(post.id, client.platform.value, "dry_run", f"Planned comment: {decision.content}")
+                             continue
 
                         # Execute Action
-                        client.like_post(post)
-                        time.sleep(random.uniform(1, 2))
+                        try:
+                            # 1. Like
+                            client.like_post(post)
+                            time.sleep(random.uniform(2, 4))
 
-                        success = client.post_comment(post, decision.content)
+                            # 2. Comment
+                            success = client.post_comment(post, decision.content)
 
-                        if success:
-                            # Log
-                            db.log_interaction(
-                                post_id=post.id,
-                                username=post.author.username,
-                                comment_text=decision.content,
-                                platform=client.platform.value,
-                                metadata={"reasoning": decision.reasoning}
-                            )
-
-                            # --- LIVE LEARNING (RAG) ---
-                            try:
-                                content_text = f"Interaction on {client.platform.value}:\nUser: @{post.author.username}\nMy Comment: \"{decision.content}\"\nReasoning: {decision.reasoning}"
-                                self.agent.knowledge_base.insert(
-                                    name=f"interaction_{post.id}",
-                                    text_content=content_text,
-                                    metadata={
-                                        "post_id": post.id,
-                                        "platform": client.platform.value,
-                                        "username": post.author.username,
-                                        "created_at": datetime.now(timezone.utc).isoformat()
-                                    },
-                                    upsert=True
+                            if success:
+                                # Log Interaction
+                                db.log_interaction(
+                                    post_id=post.id,
+                                    username=post.author.username,
+                                    comment_text=decision.content,
+                                    platform=client.platform.value,
+                                    metadata={"reasoning": decision.reasoning, "confidence": decision.confidence_score}
                                 )
-                                logger.debug(f"[{name}] 🧠 Interaction saved to memory (RAG).")
-                            except Exception as e:
-                                logger.error(f"[{name}] Failed to save to memory: {e}")
+                                
+                                # Update Discovery Status
+                                db.update_discovery_status(post.id, client.platform.value, "commented", decision.reasoning)
 
-                            interacted = True
-                            logger.info(f"[{name}] ✅ Interaction successful.")
-                            break  # Done with this platform
-                        else:
-                            logger.error(f"[{name}] Failed to execute action.")
+                                # --- LIVE LEARNING (RAG) ---
+                                try:
+                                    content_text = f"Interaction on {client.platform.value}:\nUser: @{post.author.username}\nMy Comment: \"{decision.content}\"\nReasoning: {decision.reasoning}\nContext: {post.content}"
+                                    self.agent.knowledge_base.insert(
+                                        name=f"interaction_{post.id}",
+                                        text_content=content_text,
+                                        metadata={
+                                            "post_id": post.id,
+                                            "platform": client.platform.value,
+                                            "username": post.author.username,
+                                            "created_at": datetime.now(timezone.utc).isoformat(),
+                                            "confidence": decision.confidence_score
+                                        },
+                                        upsert=True
+                                    )
+                                    logger.debug(f"[{name}] 🧠 Interaction saved to memory (RAG).")
+                                except Exception as e:
+                                    logger.error(f"[{name}] Failed to save to memory: {e}")
+
+                                interacted = True
+                                logger.info(f"[{name}] ✅ Interaction successful.")
+                                break  # Done with this platform for this cycle (1 interaction per cycle limit typically)
+                            else:
+                                logger.error(f"[{name}] Failed to post comment.")
+                                db.update_discovery_status(post.id, client.platform.value, "error", "Failed to post comment")
+                        
+                        except Exception as e:
+                            logger.error(f"[{name}] Error executing action: {e}")
+                            db.update_discovery_status(post.id, client.platform.value, "error", str(e))
+
                     else:
-                        logger.info(f"[{name}] Skipped. Reason: {decision.reasoning}")
+                        logger.info(f"[{name}] Rejected. Reason: {decision.reasoning}")
+                        db.update_discovery_status(post.id, client.platform.value, "rejected", decision.reasoning)
 
                 except Exception as e:
                     logger.error(f"[{name}] Error processing candidate {post.id}: {e}")
+                    db.update_discovery_status(post.id, client.platform.value, "error", f"Processing error: {e}")
                     continue
 
             if not interacted:

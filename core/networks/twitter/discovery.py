@@ -71,7 +71,32 @@ class TwitterDiscovery(DiscoveryStrategy):
 
     def validate_candidate(self, post: SocialPost) -> bool:
         if not post.id: return False
+        
+        # 1. Stage A: Collector - Log everything as 'seen'
+        # We log immediately to track that we found it
+        metrics = getattr(post, 'metrics', {})
+        db.log_discovery(post.id, post.platform.value, "discovery", metrics)
+
+        # 2. Stage B: Marketing Filter
+        reply_count = metrics.get("reply_count", 0)
+        
+        # Rule: 5 <= replies <= 50
+        # If outside this range, we skip it
+        if reply_count < 5:
+            logger.debug(f"Skipping {post.id}: Low engagement ({reply_count} replies)")
+            db.update_discovery_status(post.id, post.platform.value, "skipped", f"Low engagement: {reply_count} replies")
+            return False
+            
+        if reply_count > 50:
+            logger.debug(f"Skipping {post.id}: Too crowded ({reply_count} replies)")
+            db.update_discovery_status(post.id, post.platform.value, "skipped", f"Too crowded: {reply_count} replies")
+            return False
+
+        # 3. Check Deduplication (Interaction history)
         if db.check_if_interacted(post.id, post.platform.value):
             logger.debug(f"Skipping {post.id}: Already interacted.")
+            db.update_discovery_status(post.id, post.platform.value, "skipped", "Already interacted")
             return False
+            
+        # If we passed all filters, it's a valid candidate for Stage C (Brain)
         return True
