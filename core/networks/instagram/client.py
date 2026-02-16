@@ -24,7 +24,8 @@ from core.browser_manager import BrowserManager
 
 from config.settings import settings
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Instagram'})
 
 
 class InstagramClient(SocialNetworkClient):
@@ -61,7 +62,7 @@ class InstagramClient(SocialNetworkClient):
             
             # Try to load existing state
             if self.session_path.exists():
-                logger.info("Loading existing browser session...")
+                logger.debug("Loading existing browser session...")
                 self.context = self.browser.new_context(
                     storage_state=str(self.session_path / "state.json"),
                     viewport={'width': 1280, 'height': 800},
@@ -70,7 +71,7 @@ class InstagramClient(SocialNetworkClient):
                     timezone_id='America/Sao_Paulo'
                 )
             else:
-                logger.info("Creating new browser context...")
+                logger.debug("Creating new browser context...")
                 self.context = self.browser.new_context(
                     viewport={'width': 1280, 'height': 800},
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -95,7 +96,7 @@ class InstagramClient(SocialNetworkClient):
         
         try:
             # Navigate to Instagram
-            logger.info("Checking login status...")
+            logger.debug("Checking login status...")
             self.page.goto('https://www.instagram.com/', timeout=30000)
             self._random_delay(2, 4)
             
@@ -105,7 +106,7 @@ class InstagramClient(SocialNetworkClient):
                     'svg[aria-label="Home"], a[href="/direct/inbox/"]',
                     timeout=5000
                 )
-                logger.info("Already logged in!")
+                logger.debug("Already logged in!")
                 self._is_logged_in = True
                 self._save_state()
                 return True
@@ -167,7 +168,7 @@ class InstagramClient(SocialNetworkClient):
         if self.context:
             self.session_path.mkdir(exist_ok=True)
             self.context.storage_state(path=str(self.session_path / "state.json"))
-            logger.info("Browser state saved.")
+            logger.debug("Browser state saved.")
     
     def stop(self):
         """Close browser and cleanup."""
@@ -209,7 +210,7 @@ class InstagramClient(SocialNetworkClient):
                     self.page.wait_for_selector(selector, timeout=5000)
                     post_links = self.page.query_selector_all(selector)
                     if post_links:
-                        logger.info(f"Found {len(post_links)} posts with selector: {selector}")
+                        logger.info(f"Found {len(post_links)} posts with selector: {selector}", stage='A')
                         break
                 except:
                     continue
@@ -253,7 +254,7 @@ class InstagramClient(SocialNetworkClient):
             return []
         
         try:
-            logger.info(f"Fetching posts from #{hashtag}...")
+            logger.info(f"Fetching posts from #{hashtag}...", stage='A')
             self.page.goto(f'https://www.instagram.com/explore/tags/{hashtag}/', timeout=30000)
             self._random_delay(3, 5)
             
@@ -332,7 +333,7 @@ class InstagramClient(SocialNetworkClient):
                 except:
                     pass
 
-            logger.info(f"[{post_code}] Extracted username: '{username}'")
+            logger.debug(f"[{post_code}] Extracted username: '{username}'")
             
             # --- Extract Caption ---
             caption = ""
@@ -390,7 +391,7 @@ class InstagramClient(SocialNetworkClient):
 
             # Log the caption for debugging
             log_caption = caption[:100].replace('\n', ' ') + "..." if len(caption) > 100 else caption.replace('\n', ' ')
-            logger.info(f"[{post_code}] Extracted caption: '{log_caption}'")
+            logger.debug(f"[{post_code}] Extracted caption: '{log_caption}'")
             
             # --- Extract Image URL ---
             image_url = None
@@ -666,7 +667,7 @@ class InstagramClient(SocialNetworkClient):
             if like_btn:
                 # Click parent usually to be safe, or the svg itself
                 like_btn.click()
-                logger.info(f"Liked post {media_id}")
+                logger.info(f"Liked post {media_id}", stage='D')
                 self._random_delay(1, 2)
                 return True
             else:
@@ -768,7 +769,7 @@ class InstagramClient(SocialNetworkClient):
             self._random_delay(3, 5)
             
             # Verify if comment appeared (optional, tricky to do reliably without waiting too long)
-            logger.info(f"Comment posted on {media_id}")
+            logger.info(f"Comment posted on {media_id}", stage='D')
             return True
             
         except Exception as e:

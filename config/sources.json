@@ -1,0 +1,62 @@
+[
+    {
+        "name": "Hacker News",
+        "url": "https://news.ycombinator.com/rss",
+        "category": "tech_news",
+        "enabled": true
+    },
+    {
+        "name": "Lobsters",
+        "url": "https://lobste.rs/rss",
+        "category": "engineering",
+        "enabled": true
+    },
+    {
+        "name": "Indie Hackers",
+        "url": "https://feed.indiehackers.world/",
+        "category": "entrepreneurship",
+        "enabled": true
+    },
+    {
+        "name": "The Pragmatic Engineer",
+        "url": "https://blog.pragmaticengineer.com/rss/",
+        "category": "career_growth",
+        "enabled": true
+    },
+    {
+        "name": "Simon Willison's Weblog",
+        "url": "https://simonwillison.net/atom/entries/",
+        "category": "ai_engineering",
+        "enabled": true
+    },
+    {
+        "name": "Real Python",
+        "url": "https://realpython.com/atom.xml",
+        "category": "python",
+        "enabled": true
+    },
+    {
+        "name": "Vercel Blog",
+        "url": "https://vercel.com/atom",
+        "category": "frontend_nextjs",
+        "enabled": true
+    },
+    {
+        "name": "Martin Fowler",
+        "url": "https://martinfowler.com/feed.atom",
+        "category": "architecture",
+        "enabled": true
+    },
+    {
+        "name": "OpenAI Blog",
+        "url": "https://openai.com/blog/rss.xml",
+        "category": "ai_news",
+        "enabled": true
+    },
+    {
+        "name": "Cloudflare Blog",
+        "url": "https://blog.cloudflare.com/rss/",
+        "category": "infrastructure",
+        "enabled": true
+    }
+]

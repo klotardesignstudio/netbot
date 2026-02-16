@@ -47,6 +47,7 @@ class SocialPost(BaseModel):
     # Context
     comments: List[SocialComment] = Field(default_factory=list)
     raw_data: Dict[str, Any] = Field(default_factory=dict) # Original payload
+    metrics: Dict[str, Any] = Field(default_factory=dict) # Detailed metrics (views, impressions, etc.)
 
 class SocialProfile(BaseModel):
     username: str
@@ -60,6 +61,7 @@ class SocialProfile(BaseModel):
 
 class ActionDecision(BaseModel):
     should_act: bool
+    confidence_score: int = 0 # 0-100
     action_type: str = "comment" # comment, like, share
     content: Optional[str] = None # The comment text
     reasoning: Optional[str] = None

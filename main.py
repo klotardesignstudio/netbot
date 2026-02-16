@@ -16,11 +16,15 @@ nest_asyncio.apply()
 from config.settings import settings
 from core.database import db
 from core.agent import SocialAgent
-from core.logger import logger
+from core.logger import NetBotLoggerAdapter
+# Base logger for main module
+import logging
+logger = NetBotLoggerAdapter(logging.getLogger("netbot"), {'status_code': 'SYSTEM'})
 from core.browser_manager import BrowserManager
 
 # Networks
 from core.profile_analyzer import ProfileAnalyzer
+from core.editor_chef import EditorChef
 from core.networks.instagram.client import InstagramClient
 from core.networks.instagram.discovery import InstagramDiscovery
 from core.networks.twitter.client import TwitterClient
@@ -35,6 +39,7 @@ class AgentOrchestrator:
     def __init__(self):
         self.agent = SocialAgent()
         self.profile_analyzer = ProfileAnalyzer()
+        self.editor = EditorChef()
         self.running = True
 
         # Platform definitions (lazy — clients are created per cycle)
@@ -51,12 +56,12 @@ class AgentOrchestrator:
                 "client_class": TwitterClient,
                 "discovery_class": TwitterDiscovery,
             },
-            {
-                "name": "Threads",
-                "platform": "threads",
-                "client_class": ThreadsClient,
-                "discovery_class": ThreadsDiscovery,
-            },
+            # {
+            #     "name": "Threads",
+            #     "platform": "threads",
+            #     "client_class": ThreadsClient,
+            #     "discovery_class": ThreadsDiscovery,
+            # },
             {
                 "name": "Dev.to",
                 "platform": "devto",
@@ -67,7 +72,7 @@ class AgentOrchestrator:
 
     def start(self):
         """Main execution loop."""
-        logger.info("🤖 NetBot Orchestrator Initialized")
+        logger.info("🤖 NetBot Orchestrator Initialized", status_code="SYSTEM")
 
         # Verify DB connection
         # Verify DB connection
@@ -100,38 +105,70 @@ class AgentOrchestrator:
             except KeyboardInterrupt:
                 self.stop()
             except Exception as e:
-                logger.exception(f"Error in main loop: {e}")
+                logger.exception(f"Error in main loop: {e}", status_code="ERROR")
                 time.sleep(60)
 
     def run_cycle(self):
         """Single execution cycle — runs each platform sequentially."""
-        logger.info("--- Starting Cycle ---")
+        logger.info("--- Starting Cycle ---", status_code="SYSTEM")
+
+        # 1. Content Curation & Personal Flow
+        try:
+            from scripts.fetch_news import NewsFetcher
+            logger.debug("Checking for new news articles...")
+            NewsFetcher().fetch_and_process()
+            
+            from scripts.generate_project_updates import ProjectUpdateGenerator
+            logger.debug("Checking for project updates...")
+            ProjectUpdateGenerator().run()
+        except Exception as e:
+            logger.error(f"Error in content flows: {e}")
 
         for cfg in self.platform_configs:
             name = cfg["name"]
 
-            # 1. Check daily limit BEFORE starting the browser
+            # 1. Determine requirements
             platform_value = cfg["platform"]
-            limit = settings.DAILY_LIMITS.get(platform_value, settings.daily_interaction_limit)
-            current_count = db.get_daily_count(platform=platform_value)
-            logger.info(f"[{name}] Daily interactions: {current_count}/{limit}")
+            
+            # Interactions Limit Check
+            interact_limit = settings.DAILY_LIMITS.get(platform_value, settings.daily_interaction_limit)
+            current_interactions = db.get_daily_count(platform=platform_value)
+            can_interact = current_interactions < interact_limit
+            
+            # Publications Availability Check
+            can_publish = self.editor.can_publish(platform_value)
+            
+            logger.info(f"[{name}] Activity: Interactions({current_interactions}/{interact_limit}) | Publishing({can_publish})", status_code="FINANCE")
 
-            if current_count >= limit:
-                logger.info(f"[{name}] Daily limit reached. Skipping...")
+            if not can_interact and not can_publish:
+                logger.info(f"[{name}] Limits reached for both interaction and publishing. Skipping...")
                 continue
 
             # 2. Start browser & login
-            logger.info(f"[{name}] Starting browser...")
+            logger.debug(f"[{name}] Starting browser (Interaction={can_interact}, Pub={can_publish})...")
             client = cfg["client_class"]()
             if not client.login():
                 logger.error(f"[{name}] Failed to login. Skipping...")
                 client.stop()
                 continue
 
-            # 3. Discovery
+            # NEW: Step 3 - Content Publication (Editor Chef)
+            if can_publish:
+                try:
+                    self.editor.transform_and_publish(client)
+                except Exception as e:
+                    logger.error(f"[{name}] Editor Chef failed: {e}")
+
+            # 3. Discovery & Interaction
+            if not can_interact:
+                logger.info(f"[{name}] Interaction limit reached. Skipping discovery/comments.")
+                client.stop()
+                continue
+
             discovery = cfg["discovery_class"](client)
-            logger.info(f"[{name}] Discovery started...")
-            candidates = discovery.find_candidates(limit=5)
+            logger.debug(f"[{name}] Discovery started...")
+            limit = settings.discovery_limit
+            candidates = discovery.find_candidates(limit=limit)
 
             if not candidates:
                 logger.info(f"[{name}] No candidates found.")
@@ -142,13 +179,13 @@ class AgentOrchestrator:
             interacted = False
             for i, post in enumerate(candidates):
                 try:
-                    logger.info(f"[{name}] Analyzing Post {i+1}/{len(candidates)}: {post.id}")
+                    logger.debug(f"[{name}] Analyzing Post {i+1}/{len(candidates)}: {post.id}")
 
                     # --- Audience Awareness (Profile Analysis) ---
                     dossier = None
                     try:
                         if hasattr(client, 'get_profile_data') and callable(client.get_profile_data):
-                            logger.info(f"[{name}] gathering dossier for @{post.author.username}...")
+                            logger.debug(f"[{name}] gathering dossier for @{post.author.username}...")
                             profile_data = client.get_profile_data(post.author.username)
                             if profile_data:
                                 dossier = self.profile_analyzer.analyze_profile(profile_data)
@@ -159,59 +196,80 @@ class AgentOrchestrator:
                     decision = self.agent.decide_and_comment(post, dossier=dossier)
 
                     if decision.should_act:
-                        logger.info(f"[{name}] Decided to ACT: {decision.content}")
+                        logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}", stage='C', status_code='BRAIN')
+                        
+                        if settings.dry_run:
+                             logger.info(f"[{name}] DRY RUN: Would have liked and commented.")
+                             db.update_discovery_status(post.id, client.platform.value, "dry_run", f"Planned comment: {decision.content}")
+                             continue
 
                         # Execute Action
-                        client.like_post(post)
-                        time.sleep(random.uniform(1, 2))
+                        try:
+                            # 1. Like
+                            client.like_post(post)
+                            time.sleep(random.uniform(2, 4))
 
-                        success = client.post_comment(post, decision.content)
+                            # 2. Comment
+                            success = client.post_comment(post, decision.content)
 
-                        if success:
-                            # Log
-                            db.log_interaction(
-                                post_id=post.id,
-                                username=post.author.username,
-                                comment_text=decision.content,
-                                platform=client.platform.value,
-                                metadata={"reasoning": decision.reasoning}
-                            )
-
-                            # --- LIVE LEARNING (RAG) ---
-                            try:
-                                content_text = f"Interaction on {client.platform.value}:\nUser: @{post.author.username}\nMy Comment: \"{decision.content}\"\nReasoning: {decision.reasoning}"
-                                self.agent.knowledge_base.insert(
-                                    name=f"interaction_{post.id}",
-                                    text_content=content_text,
-                                    metadata={
-                                        "post_id": post.id,
-                                        "platform": client.platform.value,
-                                        "username": post.author.username,
-                                        "created_at": datetime.now(timezone.utc).isoformat()
-                                    },
-                                    upsert=True
+                            if success:
+                                # Log Interaction
+                                db.log_interaction(
+                                    post_id=post.id,
+                                    username=post.author.username,
+                                    comment_text=decision.content,
+                                    platform=client.platform.value,
+                                    metadata={"reasoning": decision.reasoning, "confidence": decision.confidence_score}
                                 )
-                                logger.info(f"[{name}] 🧠 Interaction saved to memory (RAG).")
-                            except Exception as e:
-                                logger.error(f"[{name}] Failed to save to memory: {e}")
+                                
+                                # Update Discovery Status
+                                db.update_discovery_status(post.id, client.platform.value, "commented", decision.reasoning)
 
-                            interacted = True
-                            logger.info(f"[{name}] ✅ Interaction successful.")
-                            break  # Done with this platform
-                        else:
-                            logger.error(f"[{name}] Failed to execute action.")
+                                # --- LIVE LEARNING (RAG) ---
+                                try:
+                                    content_text = f"Interaction on {client.platform.value}:\nUser: @{post.author.username}\nMy Comment: \"{decision.content}\"\nReasoning: {decision.reasoning}\nContext: {post.content}"
+                                    self.agent.knowledge_base.insert(
+                                        name=f"interaction_{post.id}",
+                                        text_content=content_text,
+                                        metadata={
+                                            "post_id": post.id,
+                                            "platform": client.platform.value,
+                                            "username": post.author.username,
+                                            "created_at": datetime.now(timezone.utc).isoformat(),
+                                            "confidence": decision.confidence_score
+                                        },
+                                        upsert=True
+                                    )
+                                    logger.debug(f"[{name}] 🧠 Interaction saved to memory (RAG).")
+                                except Exception as e:
+                                    logger.error(f"[{name}] Failed to save to memory: {e}")
+
+                                interacted = True
+                                logger.info(f"[{name}] ✅ Interaction successful.")
+                                break  # Done with this platform for this cycle (1 interaction per cycle limit typically)
+                            else:
+                                logger.error(f"[{name}] Failed to post comment.")
+                                db.update_discovery_status(post.id, client.platform.value, "error", "Failed to post comment")
+                        
+                        except Exception as e:
+                            logger.error(f"[{name}] Error executing action: {e}")
+                            db.update_discovery_status(post.id, client.platform.value, "error", str(e))
+
                     else:
-                        logger.info(f"[{name}] Skipped. Reason: {decision.reasoning}")
+                        logger.info(f"[{name}] Rejected.", stage='C', status_code='BRAIN')
+                        logger.info(f"Reason: {decision.reasoning}", stage='C', status_code='BRAIN')
+                        db.update_discovery_status(post.id, client.platform.value, "rejected", decision.reasoning)
 
                 except Exception as e:
                     logger.error(f"[{name}] Error processing candidate {post.id}: {e}")
+                    db.update_discovery_status(post.id, client.platform.value, "error", f"Processing error: {e}")
                     continue
 
             if not interacted:
                 logger.info(f"[{name}] Finished candidates with no interaction.")
 
             # 5. Close browser & Playwright for this platform
-            logger.info(f"[{name}] Closing browser...")
+            logger.debug(f"[{name}] Closing browser...")
             client.stop()
 
     def stop(self, signum=None, frame=None):

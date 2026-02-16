@@ -10,7 +10,8 @@ from core.networks.twitter.client import TwitterClient
 from core.interfaces import DiscoveryStrategy
 from core.models import SocialPost
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Twitter'})
 
 class TwitterDiscovery(DiscoveryStrategy):
     def __init__(self, client: TwitterClient):
@@ -50,7 +51,7 @@ class TwitterDiscovery(DiscoveryStrategy):
         attempts = min(3, len(self.vip_list))
         tried = random.sample(self.vip_list, attempts)
         for target_user in tried:
-            logger.info(f"Twitter Discovery: Checking VIP @{target_user}")
+            logger.info(f"Twitter Discovery: Checking VIP @{target_user}", stage='A')
             posts = self.client.get_user_latest_posts(target_user, limit=amount)
             if posts:
                 return posts
@@ -62,7 +63,7 @@ class TwitterDiscovery(DiscoveryStrategy):
         attempts = min(3, len(self.hashtags))
         tried = random.sample(self.hashtags, attempts)
         for target_tag in tried:
-            logger.info(f"Twitter Discovery: Checking Hashtag #{target_tag}")
+            logger.info(f"Twitter Discovery: Checking Hashtag #{target_tag}", stage='A')
             posts = self.client.search_posts(target_tag, limit=amount)
             if posts:
                 random.shuffle(posts)
@@ -71,7 +72,32 @@ class TwitterDiscovery(DiscoveryStrategy):
 
     def validate_candidate(self, post: SocialPost) -> bool:
         if not post.id: return False
-        if db.check_if_interacted(post.id, post.platform.value):
-            logger.debug(f"Skipping {post.id}: Already interacted.")
+        
+        # 1. Stage A: Collector - Log everything as 'seen'
+        # We log immediately to track that we found it
+        metrics = getattr(post, 'metrics', {})
+        db.log_discovery(post.id, post.platform.value, "discovery", metrics)
+
+        # 2. Stage B: Marketing Filter
+        reply_count = metrics.get("reply_count", 0)
+        
+        # Rule: 5 <= replies <= 50
+        # If outside this range, we skip it
+        if reply_count < 5:
+            logger.warning(f"Skipping {post.id}: Low engagement ({reply_count} replies)", stage='B')
+            db.update_discovery_status(post.id, post.platform.value, "skipped", f"Low engagement: {reply_count} replies")
             return False
+            
+        if reply_count > 50:
+            logger.warning(f"Skipping {post.id}: Too crowded ({reply_count} replies)", stage='B')
+            db.update_discovery_status(post.id, post.platform.value, "skipped", f"Too crowded: {reply_count} replies")
+            return False
+
+        # 3. Check Deduplication (Interaction history)
+        if db.check_if_interacted(post.id, post.platform.value):
+            logger.warning(f"Skipping {post.id}: Already interacted.", stage='B')
+            db.update_discovery_status(post.id, post.platform.value, "skipped", "Already interacted")
+            return False
+            
+        # If we passed all filters, it's a valid candidate for Stage C (Brain)
         return True

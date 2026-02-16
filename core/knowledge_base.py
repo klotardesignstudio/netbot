@@ -46,3 +46,22 @@ class NetBotKnowledgeBase(Knowledge):
     def is_available(self) -> bool:
         """Checks if the KB is properly configured."""
         return bool(settings.PG_DATABASE_URL)
+
+    def search_similar_takes(self, query: str, limit: int = 3) -> list[str]:
+        """
+        Searches for previous interactions/takes on similar topics.
+        Returns a list of relevant text snippets.
+        """
+        try:
+            if not self.is_available(): return []
+            
+            # Using the vector_db search directly to get documents
+            results = self.vector_db.search(query, limit=limit)
+            
+            # Extract content from Document objects
+            # results is typically List[Document]
+            snippets = [doc.content for doc in results if doc.content]
+            return snippets
+        except Exception as e:
+            logger.error(f"Error searching knowledge base: {e}")
+            return []

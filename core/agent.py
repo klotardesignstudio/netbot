@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from config.settings import settings
-from core.logger import logger
+from core.logger import logger, NetBotLoggerAdapter
 from core.models import SocialPost, ActionDecision, SocialPlatform
 from core.knowledge_base import NetBotKnowledgeBase
 from core.profile_analyzer import ProfileDossier
@@ -15,13 +15,15 @@ from core.profile_analyzer import ProfileDossier
 
 class AgentOutput(BaseModel):
     should_comment: bool = Field(..., description="Set to True if we should comment, False to skip.")
-    comment_text: str = Field(..., description="The comment text. MUST be in English. No hashtags. Max 1 emoji. Avoid generic phrases.")
+    confidence_score: int = Field(..., description="0-100 score of how confident you are in this action.")
+    comment_text: str = Field(..., description="The comment text. MUST be in English. NO hashtags. Max 1 emoji. Avoid generic phrases.")
     reasoning: str = Field(..., description="Brief reason for the decision and the chosen comment.")
 
 class SocialAgent:
     def __init__(self):
         self.prompts = settings.load_prompts()
         self.knowledge_base = NetBotKnowledgeBase()
+        self.logger = NetBotLoggerAdapter(logger, {'stage': 'C', 'status_code': 'BRAIN'})
         self.agent = self._create_agent()
 
     def _create_agent(self) -> Agent:
@@ -32,10 +34,9 @@ class SocialAgent:
         try:
             with open(persona_path, "r", encoding="utf-8") as f:
                 persona_content = f.read()
-            logger.info(f"✅ Persona loaded from {persona_path} ({len(persona_content)} chars)")
-            logger.debug(f"Persona Preview: {persona_content[:100]}...")
+            self.logger.debug(f"✅ Persona loaded from {persona_path} ({len(persona_content)} chars)")
         except Exception as e:
-            logger.error(f"❌ Failed to load persona from {persona_path}: {e}")
+            self.logger.error(f"❌ Failed to load persona from {persona_path}: {e}")
             persona_content = "You are a helpful social media assistant."
 
         system_prompt = f"""
@@ -56,10 +57,8 @@ class SocialAgent:
            - DO NOT use the word "tapestry".
         
         ## IMPORTANT: Learning from History
-        1. **SEARCH KNOWLEDGE BASE**: Search your knowledge base ONCE for similar posts you've interacted with.
-        2. **STOP SEARCHING**: If you find relevant examples, use them. If not, proceed with your best judgment. Do NOT search again.
-        3. **ADOPT STYLE**: Look at your past comments on those posts. Match that specific tone (e.g., if you were witty before, be witty now).
-        4. **CONSISTENCY**: If you have expressed an opinion on a topic before, stick to it.
+        1. **CONSISTENCY**: Validate your opinion against provided Past Interactions. If you have expressed an opinion on a topic before, stick to it.
+        2. **ADOPT STYLE**: Look at your past comments on those posts. Match that specific tone.
         """
         
         return Agent(
@@ -68,7 +67,7 @@ class SocialAgent:
             instructions=system_prompt,
             output_schema=AgentOutput,
             knowledge=self.knowledge_base,
-            search_knowledge=True,
+            search_knowledge=False, # We do manual RAG injection now for better control
             markdown=True
         )
 
@@ -77,13 +76,13 @@ class SocialAgent:
         Analyzes a candidate post and returns an ActionDecision.
         """
         try:
-            # Prepare Input
+            # 1. Prepare Input Context
             comments_context = ""
             if post.comments:
                 formatted_comments = "\n".join([f"- @{c.author.username}: {c.text}" for c in post.comments])
                 comments_context = f"\nRecent Comments (for context):\n{formatted_comments}"
 
-            # Prepare Dossier Context
+            # 2. Prepare Dossier Context
             dossier_context = ""
             if dossier:
                 dossier_context = f"""
@@ -97,7 +96,30 @@ class SocialAgent:
                 IMPORTANT: Adapt your response to match this person's level and tone.
                 """
 
-            # Determines constraints based on platform
+            # 3. Analyze Metrics for "Hot Take" Opportunity
+            metrics = getattr(post, 'metrics', {})
+            reply_count = metrics.get('reply_count', 0)
+            like_count = metrics.get('like_count', 0)
+            
+            engagement_signal = "Low"
+            hot_take_instruction = "Kickstart the conversation. Be provocative but polite."
+            
+            if reply_count > 10:
+                engagement_signal = "High"
+                hot_take_instruction = "Join the flow. Reply to a specific point from existing comments (if valid)."
+            elif reply_count > 0:
+                engagement_signal = "Medium"
+                hot_take_instruction = "Add a constructive perspective to the existing discussion."
+
+            # 4. RAG: Search for Consistency
+            # We search for the post content to find similar past topics
+            past_takes = self.knowledge_base.search_similar_takes(post.content, limit=2)
+            consistency_context = ""
+            if past_takes:
+                consistency_context = "\n## PAST INTERACTIONS (CONSISTENCY CHECK)\n" + "\n".join([f"- {take}" for take in past_takes])
+
+
+            # 5. Build Final Prompt
             char_limit = "280 characters" if post.platform == SocialPlatform.TWITTER else "proportional to the post length"
             
             if post.platform == SocialPlatform.TWITTER:
@@ -116,15 +138,22 @@ class SocialAgent:
             - Author: @{post.author.username}
             - Content: "{post.content}"
             - Media Type: {post.media_type}
+            
+            ## CONTEXT & SIGNALS
+            - Engagement: {reply_count} replies, {like_count} likes.
+            - Signal: {engagement_signal} Engagement.
+            - Strategy: {hot_take_instruction}
+            
             {dossier_context}
             {comments_context}
+            {consistency_context}
             
             Determine if I should comment. If yes, write the comment.
             - Constraint: Max {char_limit}.
             - {style_guide}
             """
             
-            logger.info(f"Agent analyzing post {post.id} by {post.author.username} on {post.platform.value}...")
+            self.logger.info(f"Agent analyzing post {post.id} by {post.author.username} on {post.platform.value}...")
             
             # Try to pass image URL directly in the prompt if available
             image_url_log = "None"
@@ -134,7 +163,7 @@ class SocialAgent:
                 image_url_log = post.media_urls[0]
             
             # --- LOGGING WHAT THE AI SEES ---
-            logger.info(f"👀 AI INPUT DATA via {post.id}:\n   -> Content: {post.content[:200]}...\n   -> Image: {image_url_log}")
+            self.logger.info(f"👀 AI INPUT DATA via {post.id}:\n   -> Content: {post.content[:200]}...\n   -> Image: {image_url_log}")
 
             # Run agent
             response_obj = self.agent.run(user_input)
@@ -142,12 +171,20 @@ class SocialAgent:
             
             # Log Token Usage if available
             if hasattr(response_obj, 'metrics') and response_obj.metrics:
-                logger.info(f"💰 Token Usage: {response_obj.metrics}")
+                self.logger.info(f"💰 Token Usage: {response_obj.metrics}", status_code='FINANCE')
             
-            logger.info(f"Agent Decision: Comment={response.should_comment} | Reasoning: {response.reasoning}")
+            self.logger.info(f"Agent Decision: Comment={response.should_comment} (Conf: {response.confidence_score}%) | Reasoning: {response.reasoning}")
             
+            # 6. Apply Confidence Filter
+            should_act = response.should_comment
+            if should_act and response.confidence_score < 70:
+                self.logger.warning(f"⚠️ Confidence too low ({response.confidence_score}%). Skipping action.")
+                should_act = False
+                response.reasoning = f"[Low Confidence {response.confidence_score}%] {response.reasoning}"
+
             return ActionDecision(
-                should_act=response.should_comment,
+                should_act=should_act,
+                confidence_score=response.confidence_score,
                 content=response.comment_text,
                 reasoning=response.reasoning,
                 action_type="comment",
@@ -155,7 +192,7 @@ class SocialAgent:
             )
 
         except Exception as e:
-            logger.error(f"Agent Malfunction: {e}")
+            self.logger.error(f"Agent Malfunction: {e}")
             return ActionDecision(should_act=False, reasoning=f"Error: {e}")
 
 # agent = SocialAgent() # Instantiation moved to main.py to avoid side effects on import

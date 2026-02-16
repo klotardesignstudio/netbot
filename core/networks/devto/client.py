@@ -1,9 +1,11 @@
 import requests
+import logging
 from typing import Optional, List, Dict, Any
 from core.interfaces import SocialNetworkClient
 from core.models import SocialPlatform, SocialPost, SocialAuthor, SocialComment, SocialProfile
 from config.settings import settings
-from core.logger import logger
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Dev.to'})
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright
 from core.browser_manager import BrowserManager
@@ -44,7 +46,7 @@ class DevToClient(SocialNetworkClient):
             response = requests.get(f"{self.BASE_URL}/users/me", headers=self.headers, timeout=self.REQUEST_TIMEOUT)
             if response.status_code == 200:
                 user_data = response.json()
-                logger.info(f"[DevTo] Authenticated as {user_data.get('username')}")
+                logger.debug(f"[DevTo] Authenticated as {user_data.get('username')}")
                 return True
             else:
                 logger.error(f"[DevTo] Authentication failed: {response.status_code} - {response.text}")
@@ -59,7 +61,7 @@ class DevToClient(SocialNetworkClient):
             return True
             
         try:
-            logger.info("[DevTo] Starting browser for interaction...")
+            logger.debug("[DevTo] Starting browser for interaction...")
             self.playwright = BrowserManager.get_playwright()
             
             self.browser = self.playwright.chromium.launch(
@@ -69,7 +71,7 @@ class DevToClient(SocialNetworkClient):
             
             state_file = self.session_path / "state_devto.json"
             if state_file.exists():
-                logger.info("[DevTo] Loading existing Dev.to session...")
+                logger.debug("[DevTo] Loading existing Dev.to session...")
                 self.context = self.browser.new_context(
                     storage_state=str(state_file),
                     viewport={'width': 1280, 'height': 800},
@@ -189,7 +191,7 @@ class DevToClient(SocialNetworkClient):
             return False
 
         try:
-            logger.info(f"[DevTo] Liking post {post.id} via Browser...")
+            logger.info(f"[DevTo] Liking post {post.id} via Browser...", stage='D')
             # Use explicit timeout
             self.page.goto(post.url, timeout=self.REQUEST_TIMEOUT * 1000)
             self.page.wait_for_load_state("domcontentloaded")
@@ -232,7 +234,7 @@ class DevToClient(SocialNetworkClient):
             return False
 
         try:
-            logger.info(f"[DevTo] Commenting on {post.id} via Browser...")
+            logger.info(f"[DevTo] Commenting on {post.id} via Browser...", stage='D')
             # If we are already on the page from like_post, we might save a nav, 
             # but safer to ensure we are on the right URL
             if self.page.url != post.url:
@@ -267,7 +269,40 @@ class DevToClient(SocialNetworkClient):
             logger.error(f"[DevTo] Error commenting via browser: {e}")
             return False
 
+    def post_content(self, title: str, body: str, tags: List[str] = None) -> Optional[Dict]:
+        """Creates a new article on Dev.to using the API."""
+        if not self.api_key:
+            logger.error("[DevTo] No API Key for posting.")
+            return None
 
+        article_data = {
+            "article": {
+                "title": title,
+                "body_markdown": body,
+                "published": True,
+                "tags": tags or []
+            }
+        }
+
+        try:
+            logger.info(f"[DevTo] Posting new article: {title}", stage='D')
+            response = requests.post(
+                f"{self.BASE_URL}/articles",
+                headers=self.headers,
+                json=article_data,
+                timeout=self.REQUEST_TIMEOUT
+            )
+            
+            if response.status_code in [200, 201]:
+                res_data = response.json()
+                logger.info(f"[DevTo] ✅ Article created: {res_data.get('url')}", stage='D')
+                return res_data
+            else:
+                logger.error(f"[DevTo] Failed to post article: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"[DevTo] Error posting article: {e}")
+            return None
 
     def search_posts(self, query: str, limit: int = 10) -> List[SocialPost]:
         """Searches articles by tag."""
@@ -315,6 +350,12 @@ class DevToClient(SocialNetworkClient):
                 profile_url=f"https://dev.to/{data['user']['username']}"
             )
             
+            metrics = {
+                "like_count": data.get("public_reactions_count", 0),
+                "comment_count": data.get("comments_count", 0),
+                "view_count": 0 # Not exposed in public list API usually
+            }
+            
             post = SocialPost(
                 id=str(data["id"]),
                 platform=SocialPlatform.DEVTO,
@@ -324,9 +365,10 @@ class DevToClient(SocialNetworkClient):
                 created_at=None,
                 media_urls=[data["cover_image"]] if data.get("cover_image") else [],
                 media_type="image" if data.get("cover_image") else "text",
-                like_count=data["public_reactions_count"],
-                comment_count=data["comments_count"],
-                raw_data=data
+                like_count=metrics["like_count"],
+                comment_count=metrics["comment_count"],
+                raw_data=data,
+                metrics=metrics
             )
             posts.append(post)
         return posts

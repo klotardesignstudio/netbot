@@ -1,7 +1,8 @@
+
 import os
 import sys
 import logging
-import psycopg
+import psycopg2
 from urllib.parse import urlparse
 
 # Add project root to path
@@ -27,9 +28,9 @@ def apply_migrations():
         return
 
     try:
-        # Use psycopg v3 (pip install psycopg)
+        # Use psycopg2
         # Connect using context manager to ensure close
-        with psycopg.connect(db_url) as conn:
+        with psycopg2.connect(db_url) as conn:
             # Get list of sql files
             files = sorted([f for f in os.listdir(migrations_dir) if f.endswith(".sql")])
             
@@ -41,11 +42,12 @@ def apply_migrations():
                 
                 try:
                     # Execute each file in its own transaction
-                    with conn.transaction():
-                         conn.execute(sql)
+                    with conn.cursor() as cur:
+                        cur.execute(sql)
+                    conn.commit()
                     logger.info(f"✅ Applied {file}")
                 except Exception as e:
-                    # Transaction is rolled back automatically on exception exit from context
+                    conn.rollback()
                     logger.warning(f"⚠️  Error applying {file} (might already exist or failed): {e}")
 
         logger.info("🎉 All migrations processed.")

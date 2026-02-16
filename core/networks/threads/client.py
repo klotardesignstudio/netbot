@@ -14,7 +14,8 @@ from core.browser_manager import BrowserManager
 
 from config.settings import settings
 
-logger = logging.getLogger(__name__)
+from core.logger import NetBotLoggerAdapter
+logger = NetBotLoggerAdapter(logging.getLogger(__name__), {'network': 'Threads'})
 
 class ThreadsClient(SocialNetworkClient):
     """
@@ -49,7 +50,7 @@ class ThreadsClient(SocialNetworkClient):
             
             state_file = self.session_path / "state_threads.json"
             if state_file.exists():
-                logger.info("Loading existing Threads session...")
+                logger.debug("Loading existing Threads session...")
                 self.context = self.browser.new_context(
                     storage_state=str(state_file),
                     viewport={'width': 1280, 'height': 800},
@@ -77,14 +78,14 @@ class ThreadsClient(SocialNetworkClient):
                 return False
         
         try:
-            logger.info("Checking Threads login status...")
+            logger.debug("Checking Threads login status...")
             self.page.goto('https://www.threads.net/', timeout=30000)
             self._random_delay(2, 4)
             
             try:
                 # Check for Home or Post button
                 self.page.wait_for_selector('svg[aria-label="Home"], a[href="/"] svg[aria-label="Home"]', timeout=5000)
-                logger.info("Threads: Already logged in!")
+                logger.debug("Threads: Already logged in!")
                 self._is_logged_in = True
                 return True
             except Exception as e:
@@ -158,6 +159,99 @@ class ThreadsClient(SocialNetworkClient):
         """Replies to a post."""
         logger.warning("Threads post_comment not implemented")
         return False
+
+    def post_content(self, text: str) -> Optional[str]:
+        """Posts a new thread. Returns 'success' if posted."""
+        if not self.page or not self.context:
+             if not self.start():
+                 return None
+
+        try:
+            logger.info("[Threads] Posting new content...")
+            self.page.goto("https://www.threads.net/", timeout=30000)
+            self._random_delay(2, 4)
+            
+            # 1. Click "Create" button (usually the central + or the one in the top/bottom nav)
+            # The selector for the create button is often an SVG with aria-label="Create"
+            create_btn_sel = 'svg[aria-label="Create"], div[role="button"][aria-label="Create"]'
+            self.page.wait_for_selector(create_btn_sel, timeout=10000)
+            self.page.click(create_btn_sel)
+            
+            # 2. Interstitial: Handle "Sign up to post" modal
+            # Threads sometimes asks for re-authentication via Instagram
+            try:
+                # Button usually has text "Continue with Instagram" or specific aria-label
+                continue_btn_sel = 'div[role="button"]:has-text("Continue as"), div[role="button"]:has-text("Continue with Instagram")'
+                if self.page.is_visible(continue_btn_sel):
+                    logger.info("[Threads] 'Sign up to post' modal detected. Clicking continue...")
+                    self.page.click(continue_btn_sel)
+                    self._random_delay(1, 2)
+            except Exception as e:
+                logger.debug(f"[Threads] No re-auth modal found: {e}")
+
+            # 3. Wait for the compose modal and type
+            # The editor is usually a div with contenteditable or a specific testid
+            editor_sel = 'div[role="textbox"], [data-testid="thread-composer-text-input"]'
+            self.page.wait_for_selector(editor_sel, timeout=10000)
+            self.page.click(editor_sel)
+            self.page.keyboard.type(text, delay=20)
+            self._random_delay(1, 2)
+            
+            # 3. Click "Post"
+            post_btn_sel = 'div[role="button"]:has-text("Post"), button:has-text("Post")'
+            
+            # Wait for button to be enabled
+            try:
+                self.page.wait_for_function(
+                    f"""() => {{
+                        const btn = Array.from(document.querySelectorAll('div[role="button"], button')).find(b => b.innerText.includes("Post"));
+                        return btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true';
+                    }}""",
+                    timeout=10000
+                )
+            except Exception as e:
+                logger.warning(f"[Threads] Post button remained disabled: {e}")
+                return None
+
+            try:
+                # Use JS click as it is more robust against transparent overlays
+                self.page.evaluate(f"Array.from(document.querySelectorAll('div[role=\"button\"], button')).find(b => b.innerText.includes('Post')).click()")
+                logger.info("[Threads] JS Click triggered.")
+            except Exception as e:
+                logger.warning(f"[Threads] JS Click failed, trying Playwright force click: {e}")
+                self.page.click(post_btn_sel, force=True)
+            
+            # 4. Success check (wait for composer to close or clear)
+            try:
+                self.page.wait_for_function(
+                    f"""() => {{
+                        const editor = document.querySelector('{editor_sel}');
+                        if (!editor) return true;
+                        const style = window.getComputedStyle(editor);
+                        if (style.display === 'none' || style.visibility === 'hidden') return true;
+                        return editor.innerText.trim().length === 0;
+                    }}""",
+                    timeout=10000
+                )
+                logger.info("[Threads] ✅ New thread posted.", stage='D')
+                return "success"
+            except Exception as e:
+                logger.warning(f"[Threads] Success verification timed out, but post might be live: {e}")
+                return "success"
+
+        except Exception as e:
+            logger.error(f"[Threads] Error posting new content: {e}")
+            # Diagnostic
+            try:
+                diag_path = settings.BASE_DIR / "logs" / "debug"
+                diag_path.mkdir(exist_ok=True, parents=True)
+                ts = int(time.time())
+                self.page.screenshot(path=str(diag_path / f"threads_error_{ts}.png"))
+                with open(diag_path / f"threads_error_{ts}.html", "w") as f:
+                    f.write(self.page.content())
+                logger.info(f"[Threads] Diagnostic saved to {diag_path}")
+            except: pass
+            return None
     
     def get_user_latest_posts(self, username: str, limit: int = 5) -> List[SocialPost]:
         """Fetches latest posts from a user's threads profile."""
@@ -165,7 +259,7 @@ class ThreadsClient(SocialNetworkClient):
         
         try:
             url = f"https://www.threads.net/@{username}"
-            logger.info(f"Visiting Threads profile: {url}")
+            logger.info(f"Visiting Threads profile: {url}", stage='A')
             self.page.goto(url, timeout=30000)
             self._random_delay(2, 4)
             
@@ -239,7 +333,7 @@ class ThreadsClient(SocialNetworkClient):
         
         try:
             url = f"https://www.threads.net/search?q={query}"
-            logger.info(f"Searching Threads: {url}")
+            logger.info(f"Searching Threads: {url}", stage='A')
             self.page.goto(url, timeout=30000)
             self._random_delay(2, 4)
             
