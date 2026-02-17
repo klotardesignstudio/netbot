@@ -43,11 +43,11 @@ class Settings:
     # Bot Limits
     # Default Limits per platform
     DAILY_LIMITS = {
-        "instagram": int(os.getenv("LIMIT_INSTAGRAM", "10")),
-        "twitter": int(os.getenv("LIMIT_TWITTER", "30")),
-        "threads": int(os.getenv("LIMIT_THREADS", "15")),
-        "linkedin": int(os.getenv("LIMIT_LINKEDIN", "15")),
-        "devto": int(os.getenv("LIMIT_DEVTO", "10"))
+        "instagram": int(os.getenv("LIMIT_INSTAGRAM", "15")),
+        "twitter": int(os.getenv("LIMIT_TWITTER", "35")),
+        "threads": int(os.getenv("LIMIT_THREADS", "20")),
+        "linkedin": int(os.getenv("LIMIT_LINKEDIN", "20")),
+        "devto": int(os.getenv("LIMIT_DEVTO", "15"))
     }
     
     # Step 3: Publishing Limits & Schedule

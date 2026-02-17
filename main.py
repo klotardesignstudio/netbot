@@ -183,24 +183,36 @@ class AgentOrchestrator:
                 client.stop()
                 continue
 
-            # 4. Attempt Interaction
-            interacted = False
-            for i, post in enumerate(candidates):
-                try:
-                    logger.debug(f"[{name}] Analyzing Post {i+1}/{len(candidates)}: {post.id}")
+            # 4. Judge ALL candidates first (batch)
+            logger.info(f"[{name}] ⚖️ Batch judging {len(candidates)} candidates...", stage='C', status_code='BRAIN')
+            approved = self.agent.judge_all(candidates)
 
-                    # Agent Analysis (Sequential Chain: Judge → Context → Writer)
-                    # The agent's ContextBuilder handles dossier internally
-                    decision = self.agent.decide_and_comment(post, client=client)
+            if not approved:
+                logger.info(f"[{name}] No candidates passed the Judge.")
+                client.stop()
+                continue
+
+            # 5. Rank by virality potential
+            logger.info(f"[{name}] 📊 Ranking {len(approved)} approved posts by virality...", stage='C', status_code='BRAIN')
+            ranked = self.agent.rank_by_virality(approved)
+
+            # 6. Write comment on the BEST candidate only
+            interacted = False
+            for post, verdict in ranked:
+                logger.info(f"[{name}] 🎯 Writing comment for top candidate: {post.id} (@{post.author.username})", stage='C', status_code='BRAIN')
+                
+                try:
+                    decision = self.agent.decide_and_comment(post, verdict, client=client)
 
                     if decision.should_act:
                         logger.info(f"[{name}] Decided to ACT (Conf: {decision.confidence_score}%): {decision.content}", stage='C', status_code='BRAIN')
-                        
-                        if settings.dry_run:
-                             logger.info(f"[{name}] DRY RUN: Would have liked and commented.")
-                             db.update_discovery_status(post.id, client.platform.value, "dry_run", f"Planned comment: {decision.content}")
-                             continue
 
+                        if settings.dry_run:
+                            logger.info(f"[{name}] DRY RUN: Would have liked and commented.")
+                            db.update_discovery_status(post.id, client.platform.value, "dry_run", f"Planned comment: {decision.content}")
+                            interacted = True
+                            break  # Done with this platform
+                        
                         # Execute Action
                         try:
                             # 1. Like
@@ -211,7 +223,6 @@ class AgentOrchestrator:
                             success = client.post_comment(post, decision.content)
 
                             if success:
-                                # Log Interaction
                                 db.log_interaction(
                                     post_id=post.id,
                                     username=post.author.username,
@@ -219,8 +230,6 @@ class AgentOrchestrator:
                                     platform=client.platform.value,
                                     metadata={"reasoning": decision.reasoning, "confidence": decision.confidence_score}
                                 )
-                                
-                                # Update Discovery Status
                                 db.update_discovery_status(post.id, client.platform.value, "commented", decision.reasoning)
 
                                 # --- LIVE LEARNING (RAG) ---
@@ -244,24 +253,24 @@ class AgentOrchestrator:
 
                                 interacted = True
                                 logger.info(f"[{name}] ✅ Interaction successful.")
-                                break  # Done with this platform for this cycle (1 interaction per cycle limit typically)
+                                break  # Done with this platform
                             else:
                                 logger.error(f"[{name}] Failed to post comment.")
                                 db.update_discovery_status(post.id, client.platform.value, "error", "Failed to post comment")
-                        
+
                         except Exception as e:
                             logger.error(f"[{name}] Error executing action: {e}")
                             db.update_discovery_status(post.id, client.platform.value, "error", str(e))
 
                     else:
-                        logger.info(f"[{name}] Rejected.", stage='C', status_code='BRAIN')
-                        logger.info(f"Reason: {decision.reasoning}", stage='C', status_code='BRAIN')
+                        logger.info(f"[{name}] Ghostwriter rejected (low confidence). Trying next...", stage='C', status_code='BRAIN')
                         db.update_discovery_status(post.id, client.platform.value, "rejected", decision.reasoning)
+                        continue  # Try next ranked candidate
 
                 except Exception as e:
                     logger.error(f"[{name}] Error processing candidate {post.id}: {e}")
                     db.update_discovery_status(post.id, client.platform.value, "error", f"Processing error: {e}")
-                    continue
+                    continue  # Try next ranked candidate
 
             if not interacted:
                 logger.info(f"[{name}] Finished candidates with no interaction.")

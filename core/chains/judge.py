@@ -23,7 +23,7 @@ class PostCategory(str, Enum):
 
 class JudgeVerdict(BaseModel):
     should_engage: bool = Field(..., description="True if the post is worth commenting on.")
-    category: PostCategory = Field(..., description="Category of the post content.")
+    category: PostCategory
     language: str = Field(..., description="Detected language code: 'pt-br', 'en', 'es', etc.")
     reasoning: str = Field(..., description="Brief reason for approval/rejection.")
 
@@ -92,7 +92,12 @@ Should we engage with this post? Categorize it and detect the language."""
 
             # Log to DB
             from core.database import db
-            metrics_raw = getattr(response_obj, 'metrics', {})
+            run_metrics = getattr(response_obj, 'metrics', None)
+            token_metrics = {
+                "input_tokens": getattr(run_metrics, 'input_tokens', 0) if run_metrics else 0,
+                "output_tokens": getattr(run_metrics, 'output_tokens', 0) if run_metrics else 0,
+                "total_cost": getattr(run_metrics, 'cost', 0.0) if run_metrics else 0.0
+            }
             db.log_llm_interaction(
                 provider="openai",
                 model="gpt-4o-mini",
@@ -100,11 +105,7 @@ Should we engage with this post? Categorize it and detect the language."""
                 user_prompt=prompt,
                 response=verdict.model_dump_json(),
                 parameters={"temperature": 0.0},
-                metrics={
-                    "input_tokens": metrics_raw.get('input_tokens', 0),
-                    "output_tokens": metrics_raw.get('output_tokens', 0),
-                    "total_cost": metrics_raw.get('total_cost', 0.0)
-                },
+                metrics=token_metrics,
                 metadata={
                     "layer": "judge",
                     "post_id": post.id,

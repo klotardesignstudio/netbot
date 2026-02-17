@@ -117,7 +117,12 @@ Match the tone from your past comments on similar topics."""
 
             # Log to DB
             from core.database import db
-            metrics_raw = getattr(response_obj, 'metrics', {})
+            run_metrics = getattr(response_obj, 'metrics', None)
+            token_metrics = {
+                "input_tokens": getattr(run_metrics, 'input_tokens', 0) if run_metrics else 0,
+                "output_tokens": getattr(run_metrics, 'output_tokens', 0) if run_metrics else 0,
+                "total_cost": getattr(run_metrics, 'cost', 0.0) if run_metrics else 0.0
+            }
             db.log_llm_interaction(
                 provider="openai",
                 model="gpt-4o-mini",
@@ -125,11 +130,7 @@ Match the tone from your past comments on similar topics."""
                 user_prompt=prompt,
                 response=output.model_dump_json(),
                 parameters={"temperature": 0.0},
-                metrics={
-                    "input_tokens": metrics_raw.get('input_tokens', 0),
-                    "output_tokens": metrics_raw.get('output_tokens', 0),
-                    "total_cost": metrics_raw.get('total_cost', 0.0)
-                },
+                metrics=token_metrics,
                 metadata={
                     "layer": "ghostwriter",
                     "post_id": context.post_id,
