@@ -1,0 +1,158 @@
+import os
+import json
+import yaml
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+CONFIG_DIR = BASE_DIR / "config"
+
+class Settings:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    CONFIG_DIR = BASE_DIR / "config"
+
+    # API Keys
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    IG_USERNAME = os.getenv("IG_USERNAME")
+    IG_PASSWORD = os.getenv("IG_PASSWORD")
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    # Postgres Connection for Agno KnowledgeBase (SQLAlchemy)
+    PG_DATABASE_URL = os.getenv("PG_DATABASE_URL")
+    
+    # Dev.to
+    DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
+
+    # Twitter API
+    TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
+    TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
+    TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+    TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+    TWITTER_CLIENT_ID = os.getenv("TWITTER_CLIENT_ID")
+    TWITTER_CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET")
+
+    # LinkedIn OAuth
+    LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID")
+    LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET")
+
+    # Bot Limits
+    # Default Limits per platform
+    # Bot Limits
+    # Default Limits per platform
+    DAILY_LIMITS = {
+        "instagram": int(os.getenv("LIMIT_INSTAGRAM", "5")),
+        "twitter": int(os.getenv("LIMIT_TWITTER", "20")),
+        "threads": int(os.getenv("LIMIT_THREADS", "10")),
+        "linkedin": int(os.getenv("LIMIT_LINKEDIN", "10")),
+        "devto": int(os.getenv("LIMIT_DEVTO", "5"))
+    }
+    
+    # Step 3: Publishing Limits & Schedule
+    PUBLISHING_LIMITS = {
+        "twitter": 10,  # posts per day
+        "threads": 10   # posts per day
+    }
+    
+    # Dev.to specific schedule (Tue/Fri)
+    DEVTO_SCHEDULE = ["Tuesday", "Friday"]
+    
+    # General Constraints
+    BUSINESS_DAYS_ONLY = True
+    PROJECT_DAY = "Friday"
+    
+    # Content Mix (Probabilities for RNG)
+    CONTENT_MIX = {
+        "news": 0.7,
+        "insight": 0.3
+    }
+    
+    # Legacy fallback (max across all if needed, but main.py will use specific)
+    daily_interaction_limit = max(DAILY_LIMITS.values())
+    min_sleep_interval = int(os.getenv("MIN_SLEEP_INTERVAL", "5400")) # 1.5 hours
+    max_sleep_interval = int(os.getenv("MAX_SLEEP_INTERVAL", "7200")) # 2.0 hours
+    dry_run = os.getenv("DRY_RUN", "True").lower() == "true"
+    discovery_limit = int(os.getenv("DISCOVERY_LIMIT", "30")) # Global limit (fallback)
+
+    # Discovery Limits per platform (How many posts to analyze per cycle)
+    DISCOVERY_LIMITS = {
+        "instagram": int(os.getenv("DISCOVERY_LIMIT_INSTAGRAM", "20")),
+        "twitter": int(os.getenv("DISCOVERY_LIMIT_TWITTER", "30")),
+        "threads": int(os.getenv("DISCOVERY_LIMIT_THREADS", "20")),
+        "linkedin": int(os.getenv("DISCOVERY_LIMIT_LINKEDIN", "30")),
+        "devto": int(os.getenv("DISCOVERY_LIMIT_DEVTO", "15"))
+    }
+    
+    # Proxy (optional, helps avoid IP bans)
+    PROXY_URL = os.getenv("PROXY_URL", None)
+    
+    # Debug mode - show browser window
+    DEBUG_HEADLESS = os.getenv("DEBUG_HEADLESS", "True").lower() == "true"
+
+    # Files
+    VIP_LIST_PATH = CONFIG_DIR / "vip_list.json"
+    HASHTAGS_PATH = CONFIG_DIR / "hashtags.json"
+    PROMPTS_PATH = CONFIG_DIR / "prompts.yaml"
+
+    # Device Emulation (Samsung Galaxy Z Fold 5)
+    # Using high-end Android settings
+    DEVICE_SETTINGS = {
+        "app_version": "315.0.0.35.109",
+        "android_version": 34, # Android 14
+        "android_release": "14.0",
+        "dpi": "480dpi",
+        "resolution": "1812x2176",
+        "manufacturer": "Samsung",
+        "device": "SM-F946B", # Galaxy Z Fold 5
+        "model": "Galaxy Z Fold 5",
+        "cpu": "qcom",
+        "version_code": "564456345"
+    }
+
+    @classmethod
+    def load_vip_list(cls, platform: str = None):
+        """Loads VIP list. Tries platform specific first (e.g. vip_list_instagram.json), then falls back to default."""
+        # --- VIP LIST DISABLED BY USER REQUEST (Hashtags Only) ---
+        return []
+
+        # if platform:
+        #     specific_path = cls.CONFIG_DIR / f"vip_list_{platform}.json"
+        #     if specific_path.exists():
+        #         with open(specific_path, "r") as f:
+        #             return json.load(f)
+        
+        # # Fallback
+        # if cls.VIP_LIST_PATH.exists():
+        #     with open(cls.VIP_LIST_PATH, "r") as f:
+        #         return json.load(f)
+        # return []
+
+    @classmethod
+    def load_hashtags(cls, platform: str = None):
+        """Loads Hashtags. Tries platform specific first, then falls back to default."""
+        if platform:
+            specific_path = cls.CONFIG_DIR / f"hashtags_{platform}.json"
+            if specific_path.exists():
+                with open(specific_path, "r") as f:
+                    return json.load(f)
+
+        # Fallback
+        if cls.HASHTAGS_PATH.exists():
+            with open(cls.HASHTAGS_PATH, "r") as f:
+                return json.load(f)
+        return []
+
+    @classmethod
+    def load_prompts(cls):
+        if cls.PROMPTS_PATH.exists():
+            with open(cls.PROMPTS_PATH, "r") as f:
+                return yaml.safe_load(f)
+        return {}
+    
+    # LLM Models
+    LLM_MODEL_GHOSTWRITER = "claude-sonnet-4-5-20250929"
+
+settings = Settings()

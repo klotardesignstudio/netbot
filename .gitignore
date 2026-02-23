@@ -1,0 +1,59 @@
+# Environment Variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# Instagram Session & Cookies (Critical security)
+session.json
+*.session
+browser_cookies.json
+browser_state/
+config/hashtags_threads.json
+config/hashtags_instagram.json
+config/vip_list_threads.json
+config/vip_list_instagram.json
+config/hashtags_twitter.json
+config/vip_list_twitter.json
+config/hashtags_devto.json
+config/vip_list_devto.json
+
+# Logs
+*.log
+logs/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+
+# Local DBs and Storage (if any generated)
+*.db
+*.sqlite3
+storage/
+
+# Pytest
+.pytest_cache/
+
+# Documentation
+docs/persona/persona.md
+
+# Debug artifacts
+debug_*.html
+debug_*.png
+debug_*.csv
+temp_slides/
+temp_slides_test/
+generated_cover_*.png
+failed_publish.png
+scripts/test_*
+run_migration_*.py
+test_db.py
